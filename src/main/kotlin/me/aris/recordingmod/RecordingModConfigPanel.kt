@@ -10,10 +10,11 @@ import net.minecraft.network.PacketBuffer
 import java.io.File
 import java.util.*
 
-val f = File("2021_10_17_13_28_11.rec")
+val f = File("2021_10_17_17_40_46.rec")
 val by = f.readBytes()
 val bufferbuffersobufferbuffer = PacketBuffer(Unpooled.wrappedBuffer(by))
 
+// TODO - use the actual player's profile lmao
 val netHandler = NetHandlerReplayClient(
   mc,
   null,

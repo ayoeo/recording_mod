@@ -10,6 +10,11 @@ object Replay {
     mc.gameSettings.keyBindAttack,
     mc.gameSettings.keyBindUseItem,
     mc.gameSettings.keyBindSwapHands,
+    mc.gameSettings.keyBindTogglePerspective,
+    mc.gameSettings.keyBindDrop,
+    mc.gameSettings.keyBindPlayerList,
+    mc.gameSettings.keyBindPickBlock,
+    mc.gameSettings.keyBindSmoothCamera,
     mc.gameSettings.keyBindSprint
   )
 
@@ -26,6 +31,8 @@ object Replay {
   //  var sprinting = false
   var nextYaw = 0f
   var nextPitch = 0f
+
+  var currentItem = 0
 
   private fun readTickEvents() {
     while (true) {

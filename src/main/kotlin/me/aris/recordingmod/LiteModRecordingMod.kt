@@ -18,7 +18,6 @@ import net.minecraft.client.renderer.GlStateManager
 import net.minecraft.network.PacketBuffer
 import java.io.File
 import kotlin.math.pow
-import kotlin.reflect.KParameter
 
 
 val mc: Minecraft
@@ -78,6 +77,7 @@ fun preTick() {
     processReplayPackets()
     // TODO - in between yaw isn't like there idk for rendering it's bad but that's ok for now
     if (replaying) {
+      // TODO - here, in playersp, idk lol
       mc.player.rotationYaw = Replay.nextYaw
       mc.player.rotationPitch = Replay.nextPitch
     }

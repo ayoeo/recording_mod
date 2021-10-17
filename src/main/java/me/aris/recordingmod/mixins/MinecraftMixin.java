@@ -43,15 +43,16 @@ abstract class MinecraftMixin {
       // Save current key state
       Recorder.INSTANCE.getWriteLaterLock().lock();
       ClientEvent.Keybinds.write(new PacketBuffer(Recorder.INSTANCE.getToWritelater()));
+      ClientEvent.CurrentItem.write(new PacketBuffer(Recorder.INSTANCE.getToWritelater()));
       Recorder.INSTANCE.getWriteLaterLock().unlock();
     } else if (Replay.INSTANCE.getReplaying()) {
-      // TODO - 
       // Set key state
       for (int i = 0; i < Replay.INSTANCE.getTrackedKeybinds().length; i++) {
         Pair<Boolean, Integer> pair = Replay.INSTANCE.getKeybinds().get(i);
         ((KeyBindingAccessor) Replay.INSTANCE.getTrackedKeybinds()[i]).setPressed(pair.getFirst());
         ((KeyBindingAccessor) Replay.INSTANCE.getTrackedKeybinds()[i]).setPressTime(pair.getSecond());
       }
+      Minecraft.getMinecraft().player.inventory.currentItem = Replay.INSTANCE.getCurrentItem();
     }
   }
 }

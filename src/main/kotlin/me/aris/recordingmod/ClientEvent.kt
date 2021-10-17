@@ -7,7 +7,7 @@ enum class ClientEvent {
   TickEnd,
   Input,
   Keybinds,
-  Sprinting,
+  CurrentItem,
   Look;
 
   fun process(): Boolean {
@@ -29,8 +29,8 @@ enum class ClientEvent {
         }
       }
 
-      Sprinting -> {
-//        Replay.sprinting = bufferbuffersobufferbuffer.readBoolean()
+      CurrentItem -> {
+        Replay.currentItem = bufferbuffersobufferbuffer.readVarInt()
       }
 
       // Ticked look, not sub-tick look that's like a different thing
@@ -67,8 +67,8 @@ enum class ClientEvent {
         }
       }
 
-      Sprinting -> {
-        packetBuffer.writeBoolean(mc.player.isSprinting)
+      CurrentItem -> {
+        packetBuffer.writeVarInt(mc.player.inventory.currentItem)
       }
 
       Look -> {

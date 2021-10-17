@@ -1,6 +1,7 @@
 package me.aris.recordingmod.mixins;
 
 import com.mojang.authlib.GameProfile;
+import me.aris.recordingmod.Replay;
 import net.minecraft.client.entity.EntityPlayerSP;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.world.World;
@@ -21,10 +22,10 @@ abstract class EntityPlayerSPMixin extends EntityPlayer {
 
   @Inject(at = @At("HEAD"), method = "onLivingUpdate")
   private void in(CallbackInfo ci) {
-//    if (Replay.INSTANCE.getReplaying()) {
-//      this.rotationYaw = Replay.INSTANCE.getNextYaw();
-//      this.rotationPitch = Replay.INSTANCE.getNextPitch();
-//    }
+    if (Replay.INSTANCE.getReplaying()) {
+      this.rotationYaw = Replay.INSTANCE.getNextYaw();
+      this.rotationPitch = Replay.INSTANCE.getNextPitch();
+    }
   }
 
   @Inject(
