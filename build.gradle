@@ -1,0 +1,85 @@
+buildscript {
+  ext.kotlin_version = '1.3.72'
+  repositories {
+    mavenLocal()
+    mavenCentral()
+    maven {
+      name = "sonatype"
+      url = "https://oss.sonatype.org/content/repositories/snapshots/"
+    }
+    maven {
+      name = "forge"
+      url = "https://files.minecraftforge.net/maven"
+    }
+    maven {
+      name = 'sponge'
+      url = 'https://repo.spongepowered.org/maven'
+    }
+  }
+  dependencies {
+    classpath 'net.minecraftforge.gradle:ForgeGradle:2.3-SNAPSHOT'
+    classpath 'org.spongepowered:mixingradle:0.4-SNAPSHOT'
+    classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+  }
+}
+
+//plugins {
+//  id "org.jetbrains.kotlin.jvm" version "1.3.61"
+//}
+
+apply plugin: 'net.minecraftforge.gradle.liteloader'
+apply plugin: 'kotlin'
+apply plugin: 'org.spongepowered.mixin'
+
+group = 'me.aris'
+version = '1.0-SNAPSHOT'
+archivesBaseName = 'recording-mod'
+
+minecraft {
+  version = project.mcVersion
+  mappings = project.mcpMappings
+  runDir = "run"
+}
+
+mixin {
+  defaultObfuscationEnv notch
+}
+
+sourceSets {
+  main {
+    refMap = "mixin.recordingmod.refmap.json"
+  }
+}
+
+
+repositories {
+  mavenCentral()
+}
+dependencies {
+  implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
+}
+compileKotlin {
+  kotlinOptions {
+    jvmTarget = "1.8"
+  }
+}
+compileTestKotlin {
+  kotlinOptions {
+    jvmTarget = "1.8"
+  }
+}
+
+litemod {
+  json {
+    name = "recording_mod"
+    mcversion = "1.12.2"
+    description = "even better than obs"
+    mixinConfigs += "mixin.recordingmod.json"
+  }
+}
+
+jar {
+  from litemod.outputs
+
+  from { configurations.compileClasspath.collect { it.isDirectory() ? it : zipTree(it) } }
+}
