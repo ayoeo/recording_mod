@@ -6,36 +6,59 @@ import me.aris.recordingmod.LiteModRecordingModKt;
 import me.aris.recordingmod.Recorder;
 import me.aris.recordingmod.Replay;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.entity.EntityPlayerSP;
 import net.minecraft.network.PacketBuffer;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(Minecraft.class)
 abstract class MinecraftMixin {
-  @Inject(at = @At("HEAD"), method = "runTick")
-  private void runTick(CallbackInfo ci) {
-    LiteModRecordingModKt.preTick();
+  @Shadow
+  public EntityPlayerSP player;
+
+  @Inject(at = @At("HEAD"), method = "runGameLoop", cancellable = true)
+  private void preGameLoop(CallbackInfo ci) {
+    if (Replay.INSTANCE.getReplaying()) {
+      if (LiteModRecordingModKt.preGameLoop())
+        ci.cancel();
+    }
   }
-//
-//  @Inject(at = @At("HEAD"), method = "clickMouse")
-//  private void leftClick(CallbackInfo ci) {
-//    if (Recorder.INSTANCE.getRecording()) {
-//      Recorder.INSTANCE.getWriteLaterLock().lock();
-//      ClientEvent.LeftClick.write(new PacketBuffer(Recorder.INSTANCE.getToWritelater()));
-//      Recorder.INSTANCE.getWriteLaterLock().unlock();
-//    }
-//  }
-//
-//  @Inject(at = @At("HEAD"), method = "rightClickMouse")
-//  private void rightClick(CallbackInfo ci) {
-//    if (Recorder.INSTANCE.getRecording()) {
-//      Recorder.INSTANCE.getWriteLaterLock().lock();
-//      ClientEvent.RightClick.write(new PacketBuffer(Recorder.INSTANCE.getToWritelater()));
-//      Recorder.INSTANCE.getWriteLaterLock().unlock();
-//    }
-//  }
+
+  @Inject(at = @At("HEAD"), method = "displayInGameMenu", cancellable = true)
+  private void gameAlwaysInFocus(CallbackInfo ci) {
+    // TODO - record a client event here (opened escape menu)
+    if (Replay.INSTANCE.getReplaying()) {
+      ci.cancel();
+    }
+  }
+
+  @Inject(at = @At("HEAD"), method = "runTick", cancellable = true)
+  private void preTick(CallbackInfo ci) {
+    if (Recorder.INSTANCE.getRecording()) {
+      Recorder.INSTANCE.getWriteLaterLock().lock();
+      ClientEvent.Look.write(new PacketBuffer(Recorder.INSTANCE.getToWritelater()));
+      Recorder.INSTANCE.getWriteLaterLock().unlock();
+    } else if (Replay.INSTANCE.getReplaying()) {
+      if (LiteModRecordingModKt.preTick()) {
+        ci.cancel();
+      }
+    }
+  }
+
+  @Inject(at = @At("TAIL"), method = "runTick")
+  private void postTick(CallbackInfo ci) {
+    if (Recorder.INSTANCE.getRecording()) {
+      Recorder.INSTANCE.getWriteLaterLock().lock();
+      ClientEvent.TickEnd.write(new PacketBuffer(Recorder.INSTANCE.getToWritelater()));
+      Recorder.INSTANCE.getWriteLaterLock().unlock();
+    } else if (Replay.INSTANCE.getReplaying() && player != null) {
+      player.rotationYaw = Replay.INSTANCE.getNextYaw();
+      player.rotationPitch = Replay.INSTANCE.getNextPitch();
+    }
+  }
 
   @Inject(at = @At("HEAD"), method = "processKeyBinds")
   private void preKeyprocess(CallbackInfo ci) {

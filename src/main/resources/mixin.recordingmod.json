@@ -6,12 +6,16 @@
   "compatibilityLevel": "JAVA_8",
   "mixins": [
     "EntityLivingBaseAccessor",
+    "EntityLivingBaseMixin",
+    "EntityMixin",
     "EntityPlayerSPMixin",
     "KeyBindingAccessor",
+    "MinecraftAccessor",
     "MinecraftMixin",
     "MovementInputFromOptionsMixin",
-    "PacketThreadUtilMixin",
     "NetworkPlayerInfoAccessor",
-    "PlayerControllerMPMixin"
+    "PacketThreadUtilMixin",
+    "PlayerControllerMPMixin",
+    "TimerMixin"
   ]
 }

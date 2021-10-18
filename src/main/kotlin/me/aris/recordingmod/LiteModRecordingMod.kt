@@ -8,17 +8,18 @@ import com.mumfrey.liteloader.modconfig.ConfigPanel
 import com.mumfrey.liteloader.modconfig.ConfigStrategy
 import com.mumfrey.liteloader.modconfig.ExposableOptions
 import me.aris.recordingmod.Recorder.recording
-import me.aris.recordingmod.Recorder.toWritelater
-import me.aris.recordingmod.Recorder.writeLaterLock
-import me.aris.recordingmod.Replay.processReplayPackets
+import me.aris.recordingmod.Replay.replayOneTick
+import me.aris.recordingmod.Replay.replayOneTickPackets
 import me.aris.recordingmod.Replay.replaying
+import me.aris.recordingmod.Replay.tickdex
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.ScaledResolution
 import net.minecraft.client.renderer.GlStateManager
-import net.minecraft.network.PacketBuffer
+import org.lwjgl.input.Keyboard
+import org.lwjgl.input.Mouse
 import java.io.File
+import kotlin.math.max
 import kotlin.math.pow
-
 
 val mc: Minecraft
   get() = Minecraft.getMinecraft()
@@ -41,10 +42,10 @@ class LiteModDRImprovement : LiteMod, Tickable, HUDRenderListener, Configurable 
       Recorder.leaveGame()
     }
 
-    if (!clock) return
+//    if (!clock) return
 
     // Raaa
-    if (!replaying && mc.player != null) Recorder.endTick()
+//    if (!replaying && mc.player != null) Recorder.endTick()
   }
 
   override fun onPreRenderHUD(screenWidth: Int, screenHeight: Int) {
@@ -71,19 +72,112 @@ class LiteModDRImprovement : LiteMod, Tickable, HUDRenderListener, Configurable 
   }
 }
 
-// Do it before the tick to make it work correctly
-fun preTick() {
-  if (replaying) {
-    processReplayPackets()
-    // TODO - in between yaw isn't like there idk for rendering it's bad but that's ok for now
-    if (replaying) {
-      // TODO - here, in playersp, idk lol
-      mc.player.rotationYaw = Replay.nextYaw
-      mc.player.rotationPitch = Replay.nextPitch
-    }
-  } else if (recording) {
-    writeLaterLock.lock()
-    ClientEvent.Look.write(PacketBuffer(toWritelater))
-    writeLaterLock.unlock()
+var paused = false
+
+private fun skipForward(ticks: Int) {
+  for (fuckYou in 0 until ticks) {
+    replayOneTick()
   }
 }
+
+private fun rewind(ticks: Int) {
+  // go to beginning??!?!
+  mc.loadWorld(null)
+  initReplay()
+  val skip = max(tickdex - ticks, 0)
+  tickdex = 0
+  skipForward(skip)
+}
+
+fun checkKeybinds(): Boolean {
+  val keys = mutableListOf<Int>()
+  while (Keyboard.next()) {
+    val down = Keyboard.getEventKeyState()
+    val keycode = if (Keyboard.getEventKey() == 0) {
+      Keyboard.getEventCharacter().toInt() + 256
+    } else {
+      Keyboard.getEventKey()
+    }
+
+    if (down) {
+      keys.add(keycode)
+
+    }
+  }
+
+  for (key in keys) {
+    when (key) {
+      Keyboard.KEY_SPACE -> {
+        paused = !paused
+      }
+
+      Keyboard.KEY_A -> {
+        // SKIP MOMENT SKIPMENT
+        rewind(20 * 1)
+        return true
+      }
+
+      Keyboard.KEY_Q -> {
+        // SKIP MOMENT SKIPMENT
+        rewind(20 * 30)
+        return true
+      }
+
+      Keyboard.KEY_F -> {
+        // SKIP MOMENT SKIPMENT
+        skipForward(20 * 60 * 1)
+        return true
+      }
+
+      Keyboard.KEY_D -> {
+        // SKIP MOMENT SKIPMENT
+        skipForward(20 * 10)
+        return true
+      }
+    }
+  }
+
+  return false
+}
+
+// True if we're taking over :)
+fun preGameLoop(): Boolean {
+  // Custom key handling is required here
+  // This also wipes keybinds to remove player interaction from the game
+  while (Mouse.next()) {
+  }
+  return checkKeybinds()
+
+  // TODO - force pause if we've reached the end of the replay
+  // TODO - force pause if we've reached the end of the replay
+
+  // TODO - also something something wait for tick do X renders change partialticks
+  //  just really fuck with the timer and make it work how we want it to
+
+  // Here, we're just sort of running the game normally
+  // Not skipping, rewinding, paused, etc.
+//  return false
+}
+
+// Return true to cancel the tick
+fun preTick(): Boolean {
+  if (paused) {
+    return true
+  }
+
+  replayOneTickPackets()
+
+//  mc.player?.rotationYaw = Replay.nextYaw
+//  mc.player?.rotationPitch = Replay.nextPitch
+
+  tickdex++
+  return false
+}
+// Do it before the tick to make it work correctly
+//fun replaySingleTick() {
+////  replayOneTickPackets()
+//  mc.player.rotationYaw = Replay.nextYaw
+//  mc.player.rotationPitch = Replay.nextPitch
+//
+//  // mc tick stuff here
+//}

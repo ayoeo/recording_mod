@@ -1,11 +1,15 @@
 package me.aris.recordingmod
 
+import com.sun.javafx.geom.Vec3f
 import me.aris.recordingmod.mixins.KeyBindingAccessor
 import net.minecraft.network.PacketBuffer
+import net.minecraft.util.math.Vec3d
+import org.lwjgl.util.vector.Vector3f
 
 enum class ClientEvent {
   TickEnd,
-  Input,
+  Position,
+  Sprinting,
   Keybinds,
   CurrentItem,
   Look;
@@ -16,11 +20,26 @@ enum class ClientEvent {
         return true
       }
 
-      Input -> {
-        Replay.moveForward = bufferbuffersobufferbuffer.readFloat()
-        Replay.moveStrafe = bufferbuffersobufferbuffer.readFloat()
-        Replay.jumping = bufferbuffersobufferbuffer.readBoolean()
-        Replay.sneaking = bufferbuffersobufferbuffer.readBoolean()
+      Position -> {
+        Replay.travelArgs = Vector3f(
+          bufferbuffersobufferbuffer.readFloat(),
+          bufferbuffersobufferbuffer.readFloat(),
+          bufferbuffersobufferbuffer.readFloat()
+        )
+        Replay.playerMotion = Vec3d(
+          bufferbuffersobufferbuffer.readDouble(),
+          bufferbuffersobufferbuffer.readDouble(),
+          bufferbuffersobufferbuffer.readDouble()
+        )
+        Replay.playerPos = Vec3d(
+          bufferbuffersobufferbuffer.readDouble(),
+          bufferbuffersobufferbuffer.readDouble(),
+          bufferbuffersobufferbuffer.readDouble()
+        )
+      }
+
+      Sprinting -> {
+        Replay.sprinting = bufferbuffersobufferbuffer.readBoolean()
       }
 
       Keybinds -> {
@@ -51,12 +70,21 @@ enum class ClientEvent {
 
     when (this) {
       TickEnd -> Unit
-      Input -> {
-        packetBuffer.writeFloat(mc.player.movementInput.moveForward)
-        packetBuffer.writeFloat(mc.player.movementInput.moveStrafe)
-        packetBuffer.writeBoolean(mc.player.movementInput.jump)
-        packetBuffer.writeBoolean(mc.player.movementInput.sneak)
 
+      Position -> {
+        packetBuffer.writeFloat(Replay.travelArgs.x)
+        packetBuffer.writeFloat(Replay.travelArgs.y)
+        packetBuffer.writeFloat(Replay.travelArgs.z)
+        packetBuffer.writeDouble(mc.player.motionX)
+        packetBuffer.writeDouble(mc.player.motionY)
+        packetBuffer.writeDouble(mc.player.motionZ)
+        packetBuffer.writeDouble(mc.player.posX)
+        packetBuffer.writeDouble(mc.player.posY)
+        packetBuffer.writeDouble(mc.player.posZ)
+      }
+
+      Sprinting -> {
+        packetBuffer.writeBoolean(mc.player.isSprinting)
       }
 
       Keybinds -> {
