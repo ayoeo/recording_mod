@@ -1,15 +1,11 @@
 package me.aris.recordingmod
 
-import com.sun.javafx.geom.Vec3f
 import me.aris.recordingmod.mixins.KeyBindingAccessor
 import net.minecraft.network.PacketBuffer
-import net.minecraft.util.math.Vec3d
-import org.lwjgl.util.vector.Vector3f
 
 enum class ClientEvent {
   TickEnd,
-  Position,
-  Sprinting,
+  CloseInventory,
   Keybinds,
   CurrentItem,
   Look;
@@ -19,27 +15,9 @@ enum class ClientEvent {
       TickEnd -> {
         return true
       }
-
-      Position -> {
-        Replay.travelArgs = Vector3f(
-          bufferbuffersobufferbuffer.readFloat(),
-          bufferbuffersobufferbuffer.readFloat(),
-          bufferbuffersobufferbuffer.readFloat()
-        )
-        Replay.playerMotion = Vec3d(
-          bufferbuffersobufferbuffer.readDouble(),
-          bufferbuffersobufferbuffer.readDouble(),
-          bufferbuffersobufferbuffer.readDouble()
-        )
-        Replay.playerPos = Vec3d(
-          bufferbuffersobufferbuffer.readDouble(),
-          bufferbuffersobufferbuffer.readDouble(),
-          bufferbuffersobufferbuffer.readDouble()
-        )
-      }
-
-      Sprinting -> {
-        Replay.sprinting = bufferbuffersobufferbuffer.readBoolean()
+      
+      CloseInventory -> {
+        mc.player.closeScreen()
       }
 
       Keybinds -> {
@@ -70,22 +48,7 @@ enum class ClientEvent {
 
     when (this) {
       TickEnd -> Unit
-
-      Position -> {
-        packetBuffer.writeFloat(Replay.travelArgs.x)
-        packetBuffer.writeFloat(Replay.travelArgs.y)
-        packetBuffer.writeFloat(Replay.travelArgs.z)
-        packetBuffer.writeDouble(mc.player.motionX)
-        packetBuffer.writeDouble(mc.player.motionY)
-        packetBuffer.writeDouble(mc.player.motionZ)
-        packetBuffer.writeDouble(mc.player.posX)
-        packetBuffer.writeDouble(mc.player.posY)
-        packetBuffer.writeDouble(mc.player.posZ)
-      }
-
-      Sprinting -> {
-        packetBuffer.writeBoolean(mc.player.isSprinting)
-      }
+      CloseInventory -> Unit
 
       Keybinds -> {
         Replay.trackedKeybinds.forEach {

@@ -11,7 +11,7 @@ import net.minecraft.network.PacketBuffer
 import java.io.File
 import java.util.*
 
-val f = File("ohhh.rec")
+val f = File("inv.rec")
 var by = f.readBytes()
 var bufferbuffersobufferbuffer = PacketBuffer(Unpooled.wrappedBuffer(by))
 

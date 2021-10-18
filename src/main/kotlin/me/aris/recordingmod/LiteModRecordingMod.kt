@@ -10,7 +10,6 @@ import com.mumfrey.liteloader.modconfig.ExposableOptions
 import me.aris.recordingmod.Recorder.recording
 import me.aris.recordingmod.Replay.replayOneTick
 import me.aris.recordingmod.Replay.replayOneTickPackets
-import me.aris.recordingmod.Replay.replaying
 import me.aris.recordingmod.Replay.tickdex
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.ScaledResolution
@@ -41,11 +40,6 @@ class LiteModDRImprovement : LiteMod, Tickable, HUDRenderListener, Configurable 
     if (!inGame && recording) {
       Recorder.leaveGame()
     }
-
-//    if (!clock) return
-
-    // Raaa
-//    if (!replaying && mc.player != null) Recorder.endTick()
   }
 
   override fun onPreRenderHUD(screenWidth: Int, screenHeight: Int) {
@@ -76,6 +70,8 @@ var paused = false
 
 private fun skipForward(ticks: Int) {
   for (fuckYou in 0 until ticks) {
+    while (Keyboard.next()) {
+    }
     replayOneTick()
   }
 }
@@ -101,7 +97,6 @@ fun checkKeybinds(): Boolean {
 
     if (down) {
       keys.add(keycode)
-
     }
   }
 
@@ -113,7 +108,7 @@ fun checkKeybinds(): Boolean {
 
       Keyboard.KEY_A -> {
         // SKIP MOMENT SKIPMENT
-        rewind(20 * 1)
+        rewind(20 * 5)
         return true
       }
 
@@ -144,8 +139,14 @@ fun checkKeybinds(): Boolean {
 fun preGameLoop(): Boolean {
   // Custom key handling is required here
   // This also wipes keybinds to remove player interaction from the game
+
+  // MOUSE WILL NOT BE
   while (Mouse.next()) {
   }
+  Mouse.getDX()
+  Mouse.getDY()
+  // MOUSE WILL NOT BE
+
   return checkKeybinds()
 
   // TODO - force pause if we've reached the end of the replay
@@ -167,17 +168,9 @@ fun preTick(): Boolean {
 
   replayOneTickPackets()
 
-//  mc.player?.rotationYaw = Replay.nextYaw
-//  mc.player?.rotationPitch = Replay.nextPitch
+  mc.player?.rotationYaw = Replay.nextYaw
+  mc.player?.rotationPitch = Replay.nextPitch
 
   tickdex++
   return false
 }
-// Do it before the tick to make it work correctly
-//fun replaySingleTick() {
-////  replayOneTickPackets()
-//  mc.player.rotationYaw = Replay.nextYaw
-//  mc.player.rotationPitch = Replay.nextPitch
-//
-//  // mc tick stuff here
-//}

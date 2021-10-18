@@ -1,30 +1,32 @@
 package me.aris.recordingmod
 
-import com.sun.javafx.geom.Vec3f
 import net.minecraft.network.EnumConnectionState
 import net.minecraft.network.EnumPacketDirection
 import net.minecraft.network.Packet
 import net.minecraft.network.PacketBuffer
-import net.minecraft.util.math.Vec3d
-import org.lwjgl.util.vector.Vector3f
 
 object Replay {
-  var tickdex = 0
-  var replaying = false
-
   val trackedKeybinds = arrayOf(
+    mc.gameSettings.keyBindForward,
+    mc.gameSettings.keyBindBack,
+    mc.gameSettings.keyBindRight,
+    mc.gameSettings.keyBindLeft,
+    mc.gameSettings.keyBindJump,
+    mc.gameSettings.keyBindSprint,
+    mc.gameSettings.keyBindSneak,
     mc.gameSettings.keyBindAttack,
     mc.gameSettings.keyBindUseItem,
     mc.gameSettings.keyBindTogglePerspective,
     mc.gameSettings.keyBindPlayerList,
-    mc.gameSettings.keyBindPickBlock,
-    mc.gameSettings.keyBindSneak
+    mc.gameSettings.keyBindPickBlock
   )
 
-  var sprinting = false
-  var playerPos: Vec3d = Vec3d(0.0, 0.0, 0.0)
-  var playerMotion: Vec3d = Vec3d(0.0, 0.0, 0.0)
-  var travelArgs: Vector3f = Vector3f(0.0f, 0.0f, 0.0f)
+  var tickdex = 0
+  var replaying = false
+  var moveForward = 0f
+  var moveStrafe = 0f
+  var jumping = false
+  var sneaking = false
 
   var keybinds = trackedKeybinds.map {
     Pair(false, 0)

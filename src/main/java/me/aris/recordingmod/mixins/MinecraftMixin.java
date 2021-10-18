@@ -55,8 +55,18 @@ abstract class MinecraftMixin {
       ClientEvent.TickEnd.write(new PacketBuffer(Recorder.INSTANCE.getToWritelater()));
       Recorder.INSTANCE.getWriteLaterLock().unlock();
     } else if (Replay.INSTANCE.getReplaying() && player != null) {
-      player.rotationYaw = Replay.INSTANCE.getNextYaw();
-      player.rotationPitch = Replay.INSTANCE.getNextPitch();
+//      player.rotationYaw = Replay.INSTANCE.getNextYaw();
+//      player.rotationPitch = Replay.INSTANCE.getNextPitch();
+    }
+  }
+
+  @Inject(at = @At("TAIL"), method = "processKeyBinds")
+  private void postKeyprocess(CallbackInfo ci) {
+    if (Recorder.INSTANCE.getRecording()) {
+      // Save current key state
+      Recorder.INSTANCE.getWriteLaterLock().lock();
+      ClientEvent.CurrentItem.write(new PacketBuffer(Recorder.INSTANCE.getToWritelater()));
+      Recorder.INSTANCE.getWriteLaterLock().unlock();
     }
   }
 
@@ -66,7 +76,6 @@ abstract class MinecraftMixin {
       // Save current key state
       Recorder.INSTANCE.getWriteLaterLock().lock();
       ClientEvent.Keybinds.write(new PacketBuffer(Recorder.INSTANCE.getToWritelater()));
-      ClientEvent.CurrentItem.write(new PacketBuffer(Recorder.INSTANCE.getToWritelater()));
       Recorder.INSTANCE.getWriteLaterLock().unlock();
     } else if (Replay.INSTANCE.getReplaying()) {
       // Set key state
