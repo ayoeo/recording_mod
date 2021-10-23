@@ -8,16 +8,16 @@ import com.mumfrey.liteloader.modconfig.ConfigPanel
 import com.mumfrey.liteloader.modconfig.ConfigStrategy
 import com.mumfrey.liteloader.modconfig.ExposableOptions
 import me.aris.recordingmod.Recorder.recording
-import me.aris.recordingmod.Replay.replayOneTick
+import me.aris.recordingmod.Replay.fakeTicking
 import me.aris.recordingmod.Replay.replayOneTickPackets
-import me.aris.recordingmod.Replay.tickdex
+import me.aris.recordingmod.Replay.rewind
+import me.aris.recordingmod.Replay.skipForward
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.ScaledResolution
 import net.minecraft.client.renderer.GlStateManager
 import org.lwjgl.input.Keyboard
 import org.lwjgl.input.Mouse
 import java.io.File
-import kotlin.math.max
 import kotlin.math.pow
 
 val mc: Minecraft
@@ -68,23 +68,6 @@ class LiteModDRImprovement : LiteMod, Tickable, HUDRenderListener, Configurable 
 
 var paused = false
 
-private fun skipForward(ticks: Int) {
-  for (fuckYou in 0 until ticks) {
-    while (Keyboard.next()) {
-    }
-    replayOneTick()
-  }
-}
-
-private fun rewind(ticks: Int) {
-  // go to beginning??!?!
-  mc.loadWorld(null)
-  initReplay()
-  val skip = max(tickdex - ticks, 0)
-  tickdex = 0
-  skipForward(skip)
-}
-
 fun checkKeybinds(): Boolean {
   val keys = mutableListOf<Int>()
   while (Keyboard.next()) {
@@ -120,13 +103,15 @@ fun checkKeybinds(): Boolean {
 
       Keyboard.KEY_F -> {
         // SKIP MOMENT SKIPMENT
-        skipForward(20 * 60 * 1)
+        skipForward(20 * 60 * 5, true, true)
+        println("Normal Skip Player: ${mc.player.positionVector}")
         return true
       }
 
       Keyboard.KEY_D -> {
         // SKIP MOMENT SKIPMENT
-        skipForward(20 * 10)
+        skipForward(20 * 10, true, false)
+        println("Broken Skip Player: ${mc.player.positionVector}")
         return true
       }
     }
@@ -166,11 +151,12 @@ fun preTick(): Boolean {
     return true
   }
 
-  replayOneTickPackets()
+  if (!fakeTicking) {
+    replayOneTickPackets(null)
 
-  mc.player?.rotationYaw = Replay.nextYaw
-  mc.player?.rotationPitch = Replay.nextPitch
+    mc.player?.rotationYaw = Replay.nextYaw
+    mc.player?.rotationPitch = Replay.nextPitch
+  }
 
-  tickdex++
   return false
 }

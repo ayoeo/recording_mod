@@ -4,16 +4,21 @@ import com.mojang.authlib.GameProfile
 import com.mumfrey.liteloader.modconfig.AbstractConfigPanel
 import com.mumfrey.liteloader.modconfig.ConfigPanelHost
 import io.netty.buffer.Unpooled
+import me.aris.recordingmod.Replay.generateRestorePoints
+import me.aris.recordingmod.Replay.packetsTime
 import me.aris.recordingmod.Replay.replaying
+import me.aris.recordingmod.Replay.restorePoints
 import me.aris.recordingmod.Replay.tickdex
 import net.minecraft.client.gui.GuiButton
 import net.minecraft.network.PacketBuffer
 import java.io.File
 import java.util.*
 
-val f = File("inv.rec")
+//val f = File("testo")
+
+val f = File("anfun")
 var by = f.readBytes()
-var bufferbuffersobufferbuffer = PacketBuffer(Unpooled.wrappedBuffer(by))
+var bufferbuffersobufferbuffer = PacketBuffer(Unpooled.copiedBuffer(by))
 
 // TODO - use the actual player's profile lmao
 var netHandler = NetHandlerReplayClient(
@@ -23,8 +28,9 @@ var netHandler = NetHandlerReplayClient(
 )
 
 fun initReplay() {
-  by = f.readBytes()
-  bufferbuffersobufferbuffer = PacketBuffer(Unpooled.wrappedBuffer(by))
+  packetsTime.clear()
+  bufferbuffersobufferbuffer.resetReaderIndex()
+//  bufferbuffersobufferbuffer = PacketBuffer(Unpooled.copiedBuffer(by))
   netHandler = NetHandlerReplayClient(
     mc,
     null,
@@ -41,6 +47,8 @@ class RecordingModConfigPanel : AbstractConfigPanel() {
     this.addControl(GuiButton(0, 0, 0, "Help")) {
       println("idk man")
       replaying = !replaying
+      generateRestorePoints()
+      println("${restorePoints.size} restore points found")
       tickdex = 0
     }
   }

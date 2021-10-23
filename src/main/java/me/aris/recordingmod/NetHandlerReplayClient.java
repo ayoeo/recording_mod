@@ -114,7 +114,7 @@ public class NetHandlerReplayClient extends NetHandlerPlayClient {
    * True if the client has finished downloading terrain and may spawn. Set upon receipt of S08PacketPlayerPosLook,
    * reset upon respawning
    */
-  private boolean doneLoadingTerrain;
+  public boolean doneLoadingTerrain;
   /**
    * A mapping from player names to their respective GuiPlayerInfo (specifies the clients response time to the server)
    */

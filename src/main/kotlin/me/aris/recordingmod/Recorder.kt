@@ -2,6 +2,8 @@ package me.aris.recordingmod
 
 import io.netty.buffer.ByteBuf
 import io.netty.buffer.Unpooled
+import me.aris.recordingmod.mixins.EntityPlayerAccessor
+import me.aris.recordingmod.mixins.EntityPlayerSPAccessor
 import net.minecraft.network.EnumConnectionState
 import net.minecraft.network.EnumPacketDirection
 import net.minecraft.network.Packet
@@ -14,18 +16,18 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 object Recorder {
+  var tickdex = 0L
   var writeLaterLock = Mutex()
   var toWritelater: ByteBuf = Unpooled.directBuffer(1024 * 1024 * 50)
 
   private var recordingFile: BufferedOutputStream? = null
-  private var tickCount = 0L // TODO - store tick count
 
   @Volatile
   var recording = false
   var recordingThread: Thread? = null
 
   fun joinGame() {
-    tickCount = 0
+    tickdex = 0
 
     // Create new recording file
     val date = Calendar.getInstance().time
@@ -94,11 +96,34 @@ object Recorder {
   }
 
   fun endTick() {
+    tickdex++
     writeLaterLock.lock()
-//    ClientEvent.Look.write(PacketBuffer(toWritelater))
-    // TODO - store tick count
     ClientEvent.TickEnd.write(PacketBuffer(toWritelater))
-    // TODO - store tick count
     writeLaterLock.unlock()
+  }
+
+  // 1 Second
+  private const val SAVE_FREQ = 5
+
+  // TODO - is this actually ideal, no idea
+  // but it will help us find bugs for now
+  var ticksToSave = SAVE_FREQ
+  var lastInteraction = 0L
+
+  // TODO - horses, minecarts, oh my
+  fun shouldSavePoint(): Boolean {
+    ticksToSave--
+    if (ticksToSave <= 0
+      && mc.currentScreen == null
+      && !mc.player.isHandActive
+      && lastInteraction + 5 < tickdex // .25 seconds since last interaction
+      && (mc.player as EntityPlayerSPAccessor).sprintToggleTimer <= 0
+      && (mc.player as EntityPlayerAccessor).flyToggleTimer <= 0
+      && !mc.playerController.isHittingBlock
+    ) {
+      ticksToSave = SAVE_FREQ
+      return true
+    }
+    return false
   }
 }
