@@ -1,224 +1,310 @@
 package me.aris.recordingmod
 
-import me.aris.recordingmod.Replay.restorePoints
+import com.mojang.authlib.GameProfile
+import io.netty.buffer.Unpooled
+import me.aris.recordingmod.mixins.SPacketMultiBlockChangeAccessor
 import net.minecraft.network.EnumConnectionState
 import net.minecraft.network.EnumPacketDirection
-import net.minecraft.network.Packet
 import net.minecraft.network.PacketBuffer
-import net.minecraft.network.play.server.SPacketChunkData
-import net.minecraft.util.math.MathHelper
-import net.minecraft.util.math.Vec3d
-import kotlin.math.absoluteValue
-import kotlin.math.floor
-import kotlin.math.max
+import net.minecraft.network.play.server.*
+import java.io.File
+import java.util.*
 import kotlin.system.measureNanoTime
 
-object Replay {
-  var fakeTicking = false
-  val trackedKeybinds = arrayOf(
-    mc.gameSettings.keyBindForward,
-    mc.gameSettings.keyBindBack,
-    mc.gameSettings.keyBindRight,
-    mc.gameSettings.keyBindLeft,
-    mc.gameSettings.keyBindJump,
-    mc.gameSettings.keyBindSprint,
-    mc.gameSettings.keyBindSneak,
-    mc.gameSettings.keyBindAttack,
-    mc.gameSettings.keyBindUseItem,
-    mc.gameSettings.keyBindTogglePerspective,
-    mc.gameSettings.keyBindPlayerList,
-    mc.gameSettings.keyBindPickBlock,
-    mc.gameSettings.keyBindInventory
-  )
-
-  var tickdex = 0L
-  var replaying = false
-
-  var keybinds = trackedKeybinds.map {
+object ReplayState {
+  var nextKeybindingState = ClientEvent.trackedKeybinds.map {
     Pair(false, 0)
   }
 
-  val restorePoints = mutableListOf<RestorePoint>()
+  var nextHeldItem = 0
 
   var nextYaw = 0f
   var nextPitch = 0f
+}
 
-  var currentItem = 0
+class Replay(replayFile: File) {
+  private var tickdex = 0
+  private val ticks: MutableList<ReplayTick> = mutableListOf()
+  private val restorePoints: HashMap<Int, ClientEvent.SavePoint> = hashMapOf()
 
-  // TODO - idk what else
-  //  what do you mean I'm worried
-  //  someone should look at that
-//  fun replayOneTick() {
-//    val useAbsolute = true
-//    fakeTicking = true
-//    val nanos = measureNanoTime {
-//      replayOneTickPackets()
-//      mc.runTick()
-//    }
-//    fakeTicking = false
-//    runTicks += nanos
-//  }
+  var netHandler = NetHandlerReplayClient(
+    mc,
+    null,
+    GameProfile(UUID.randomUUID(), "Guy")
+  )
 
-  var runTicks = 0L
-  var readPackets = 0L
-  var processPackets = 0L
-  val packetsTime = hashMapOf<Class<Packet<*>>, Long>()
+  // TODO - option to store replay in memory or not
+  //  we would have to do some major tweaking to make that work, though
+  //  eh
 
-  fun generateRestorePoints() {
-    var tickd = 0L
-    while (true) {
-      if (bufferbuffersobufferbuffer.readableBytes() == 0) {
-        break
-      }
-      val i = bufferbuffersobufferbuffer.readVarInt()
+  init {
+    val loadTime = measureNanoTime {
+      val buffer = PacketBuffer(Unpooled.wrappedBuffer(replayFile.readBytes()))
+      val clientEvents = mutableListOf<ClientEvent>()
+      val serverPackets = mutableListOf<RawServerPacket>()
 
-      if (i < 0) {
-        val enumIndex = (i * -1) - 1 // (-1, -2, -3) -> (0, 1, 2)
-        val clientEvent = ClientEvent.values()[enumIndex]
-        if (clientEvent.process(false, true)) {
-          tickd++
-        }
-
-        if (clientEvent == ClientEvent.SavePoint) {
-          println("Found save point at $tickd -> ${restorePoints.last().tickdex}")
-        }
-      } else {
-        val size = bufferbuffersobufferbuffer.readVarInt()
-        bufferbuffersobufferbuffer.skipBytes(size)
-      }
-    }
-
-    initReplay() //bruv
-  }
-
-  fun replayOneTickPackets(finalPosition: Vec3d?) {
-    tickdex++
-    var process = 0L
-    val nanos = measureNanoTime {
       while (true) {
-        val i = bufferbuffersobufferbuffer.readVarInt()
-        if (i < 0) {
-          val enumIndex = (i * -1) - 1 // (-1, -2, -3) -> (0, 1, 2)
-          val clientEvent = ClientEvent.values()[enumIndex]
-          if (clientEvent.process(true, true)) break
-        } else {
-          val size = bufferbuffersobufferbuffer.readVarInt()
-          val buf = PacketBuffer(bufferbuffersobufferbuffer.readBytes(size))
-          val packet: Packet<NetHandlerReplayClient> =
-            EnumConnectionState.PLAY.getPacket(
-              EnumPacketDirection.CLIENTBOUND,
-              i
-            ) as Packet<NetHandlerReplayClient>
+        // Check if we've reached the end of our buffer
+        if (buffer.readableBytes() == 0) break
 
-          packet.readPacketData(buf)
-//          if (!ignorePacket(packet, finalPosition)) {
-          val processNanos = measureNanoTime {
-            packet.processPacket(netHandler)
+        val i = buffer.readVarInt()
+        if (i < 0) {
+          val clientEvent = ClientEvent.eventFromId(i)
+          clientEvent.loadFromBuffer(buffer)
+
+          // End of tick, push it
+          if (clientEvent is ClientEvent.SavePoint) {
+            this.restorePoints[this.ticks.size] = clientEvent
           }
-          val existing = packetsTime.getOrDefault<Class<*>, Long>(packet.javaClass, 0)
-          packetsTime.put(packet.javaClass, existing + processNanos)
-          process += processNanos
+
+          if (clientEvent is ClientEvent.TickEnd) {
+            this.ticks.add(ReplayTick(clientEvents.toList(), serverPackets.toList()))
+            clientEvents.clear()
+            serverPackets.clear()
+            continue
+          } else {
+            clientEvents.add(clientEvent)
+          }
+        } else {
+          val size = buffer.readVarInt()
+          serverPackets.add(RawServerPacket(i, size, buffer.readBytes(size)))
         }
-//        }
       }
     }
 
-    processPackets += process
-    readPackets += (nanos - process)
+    println("Total load time for ${replayFile.name}: ${loadTime / 1000000}ms")
   }
 
-//  private fun ignorePacket(packet: Packet<*>, finalPosition: Vec3d?): Boolean {
-//    val finalPosition = finalPosition ?: return false
-//
-//    if (packet is SPacketChunkData) {
-////      packet.chunkX
-//
-//      // TODO - save this lol
-//      val renderDistance = mc.gameSettings.renderDistanceChunks
-//      val x = floor(finalPosition.x / 16.0).toInt()
-//      val z = floor(finalPosition.z / 16.0).toInt()
-//      // TODO - is this of by one?? idk
-//      if ((packet.chunkX - x).absoluteValue >= renderDistance || (packet.chunkZ - z).absoluteValue >= renderDistance) {
-//        return true
-//      }
-//    }
-//
-//    return false
+  private fun playUntil(targetTick: Int) {
+    val chunkDataID =
+      EnumConnectionState.PLAY.getPacketId(EnumPacketDirection.CLIENTBOUND, SPacketChunkData())
+    val multiBlockChangeID =
+      EnumConnectionState.PLAY.getPacketId(
+        EnumPacketDirection.CLIENTBOUND,
+        SPacketMultiBlockChange()
+      )
+    val blockChangeID =
+      EnumConnectionState.PLAY.getPacketId(
+        EnumPacketDirection.CLIENTBOUND,
+        SPacketBlockChange()
+      )
+    val chunkUnloadID =
+      EnumConnectionState.PLAY.getPacketId(EnumPacketDirection.CLIENTBOUND, SPacketUnloadChunk())
+    val spawnPlayerID =
+      EnumConnectionState.PLAY.getPacketId(EnumPacketDirection.CLIENTBOUND, SPacketSpawnPlayer())
+    val spawnMobID =
+      EnumConnectionState.PLAY.getPacketId(EnumPacketDirection.CLIENTBOUND, SPacketSpawnMob())
+    val spawnEXPOrbID =
+      EnumConnectionState.PLAY.getPacketId(
+        EnumPacketDirection.CLIENTBOUND,
+        SPacketSpawnExperienceOrb()
+      )
+    val spawnPaintingID =
+      EnumConnectionState.PLAY.getPacketId(
+        EnumPacketDirection.CLIENTBOUND,
+        SPacketSpawnPainting()
+      )
+    val spawnObjectID =
+      EnumConnectionState.PLAY.getPacketId(
+        EnumPacketDirection.CLIENTBOUND,
+        SPacketSpawnObject()
+      )
+    val spawnGlobalID =
+      EnumConnectionState.PLAY.getPacketId(
+        EnumPacketDirection.CLIENTBOUND,
+        SPacketSpawnGlobalEntity()
+      )
+    val destroyEntityID =
+      EnumConnectionState.PLAY.getPacketId(
+        EnumPacketDirection.CLIENTBOUND,
+        SPacketDestroyEntities()
+      )
+
+    val ignoredPacketInfo = hashSetOf<Pair<Int, Int>>()
+
+    // WOAH!
+    val loadedChunks = hashMapOf<Pair<Int, Int>, Pair<Int, Int>>()
+    val changedBlockChunks = hashMapOf<Pair<Int, Int>, MutableList<Pair<Int, Int>>>()
+    val spawnedEntities = hashMapOf<Int, Pair<Int, Int>>()
+
+    // pre process
+    val preprocesstime = measureNanoTime {
+      for (i in 0 until targetTick - tickdex) {
+        val tick = this.ticks[this.tickdex + i]
+        for ((i2, rawPacket) in tick.serverPackets.withIndex()) {
+          // OH YEAH
+          val packetProcessIndex = Pair(i, i2)
+
+          // Block changes
+          if (rawPacket.packetID == multiBlockChangeID) {
+            val packet = rawPacket.cookPacket() as SPacketMultiBlockChange
+            val chunkPos = (packet as SPacketMultiBlockChangeAccessor).chunkPos
+            changedBlockChunks.getOrPut(Pair(chunkPos.x, chunkPos.z)) {
+              mutableListOf()
+            }.add(packetProcessIndex)
+          }
+          if (rawPacket.packetID == blockChangeID) {
+            val packet = rawPacket.cookPacket() as SPacketBlockChange
+            val chunkX = packet.blockPosition.x shr 4
+            val chunkZ = packet.blockPosition.z shr 4
+            changedBlockChunks.getOrPut(Pair(chunkX, chunkZ)) {
+              mutableListOf()
+            }.add(packetProcessIndex)
+          }
+
+          // Chunk loads
+          if (rawPacket.packetID == chunkDataID) {
+            val packet = rawPacket.cookPacket() as SPacketChunkData
+            val chunkCoords = Pair(packet.chunkX, packet.chunkZ)
+            loadedChunks[chunkCoords] = packetProcessIndex
+          }
+
+          // Spawning stuff
+          val id = when (rawPacket.packetID) {
+            spawnPlayerID -> (rawPacket.cookPacket() as SPacketSpawnPlayer).entityID
+            spawnMobID -> (rawPacket.cookPacket() as SPacketSpawnMob).entityID
+            spawnEXPOrbID -> (rawPacket.cookPacket() as SPacketSpawnExperienceOrb).entityID
+            spawnPaintingID -> (rawPacket.cookPacket() as SPacketSpawnPainting).entityID
+            spawnObjectID -> (rawPacket.cookPacket() as SPacketSpawnObject).entityID
+            spawnGlobalID -> (rawPacket.cookPacket() as SPacketSpawnGlobalEntity).entityId
+            else -> null
+          }
+          if (id != null) {
+            spawnedEntities[id] = packetProcessIndex
+          }
+
+          // UN AND DE
+          // UN AND DE
+          // UN AND DE
+
+          // Entity despawns
+          if (rawPacket.packetID == destroyEntityID) {
+            val packet = rawPacket.cookPacket() as SPacketDestroyEntities
+            for (entID in packet.entityIDs) {
+              val spawnIndex = spawnedEntities[entID]
+              if (spawnIndex != null) {
+                ignoredPacketInfo.add(spawnIndex)
+                ignoredPacketInfo.add(packetProcessIndex)
+                spawnedEntities.remove(entID)
+              }
+            }
+          }
+
+          // Chunk unloads
+          if (rawPacket.packetID == chunkUnloadID) {
+            val packet = rawPacket.cookPacket() as SPacketUnloadChunk
+            val chunkCoords = Pair(packet.x, packet.z)
+            val loadIndex = loadedChunks[chunkCoords]
+            if (loadIndex != null) {
+              ignoredPacketInfo.add(loadIndex)
+              ignoredPacketInfo.add(packetProcessIndex)
+
+              // Only remove unload chunk once!!!
+              loadedChunks.remove(chunkCoords)
+            }
+
+            val changedIndices = changedBlockChunks[chunkCoords]
+            if (changedIndices != null) {
+              ignoredPacketInfo.addAll(changedIndices)
+              changedBlockChunks.remove(chunkCoords)
+            }
+          }
+        }
+      }
+    }
+
+    println("Preprocess time: ${preprocesstime / 1000000}")
+
+    val replayTime = measureNanoTime {
+      for (i in 0 until targetTick - tickdex) {
+        if (this.tickdex < this.ticks.size) {
+          this.ticks[this.tickdex].replayFast(i, ignoredPacketInfo)
+//          this.ticks[this.tickdex].replayFull()
+          this.tickdex++
+        }
+      }
+    }
+    println("Replay time: ${replayTime / 1000000}")
+  }
+
+  fun playNextTick() {
+    if (this.tickdex < this.ticks.size) {
+      this.ticks[this.tickdex].replayFull()
+      this.tickdex++
+    }
+  }
+
+  fun restart() {
+    // TODO - store uuid and stuff and name in the replay file
+    this.tickdex = 0
+    // TODO - get this from the same thing that stores replay metadata ^^^
+    mc.gameSettings.thirdPersonView = 0;
+
+    mc.ingameGUI.chatGUI.clearChatMessages(true)
+    this.netHandler = NetHandlerReplayClient(
+      mc,
+      null,
+      GameProfile(UUID.randomUUID(), "Guy")
+    )
+    mc.loadWorld(null)
+  }
+
+  fun skipBackwards(ticks: Int) {
+    val targetTick = (this.tickdex - ticks).coerceAtLeast(0)
+    this.restart()
+
+    skipForward(targetTick)
+  }
+
+  // TODO - idk
+//  fun skipTo(tickdex: Int) {
+//    val targetTick = this.tickdex.coerceIn(0, this.ticks.size - 1)
+//    skipForward(targetTick)
 //  }
 
-  private fun findClosestRestorePoint(targetTick: Long, after: Boolean): RestorePoint? {
-    val targetTick = 18000
-//    val targetTick = 700
-//    val targetTick = 1762
-    var current: RestorePoint? = null
+  fun skipForward(ticks: Int) {
+    var targetTick = (this.tickdex + ticks).coerceAtMost(this.ticks.size - 1)
+//    targetTick = 6030
+//    targetTick = 21000
+    println("TARGET TICK: $targetTick")
+//    targetTick = 60 * 20
+
+    this.playUntil(targetTick)
+//    for (i in 0 until targetTick - tickdex) {
+//      this.playNextTick()
+//
+//      // TODO - track perspective change, inventory open, close, ALL INVENTORY STUFF
+//      // and yeah just like stuff like that replay it and it's fine
+//    }
+  }
+
+  fun reachedEnd() = this.tickdex >= this.ticks.size
+
+  // TODO - restore
+  private fun findClosestRestorePoint(
+    targetTick: Int,
+    after: Boolean
+  ): Pair<Int, ClientEvent.SavePoint>? {
+//    val targetTick = 18000
+    var current: Pair<Int, ClientEvent.SavePoint>? = null
     // TODO - binary search
     if (!after) {
-      for (point in restorePoints) {
-        if (point.tickdex < targetTick /*- 100*/) { // 5 seconds of normal ticking
-          current = point
+      for ((tickdex, point) in restorePoints) {
+        if (tickdex < targetTick) {
+          current = Pair(tickdex, point)
         } else {
           break
         }
       }
     } else {
-      for (point in restorePoints) {
-        if (point.tickdex > targetTick /*- 100*/) { // 5 seconds of normal ticking
-          current = point
+      for ((tickdex, point) in restorePoints) {
+        if (tickdex > targetTick) {
+          current = Pair(tickdex, point)
           break
         }
       }
     }
 
     return current
-  }
-
-  fun skipForward(ticks: Long, after: Boolean, fake: Boolean) {
-//    val after = false
-    val targetTick = tickdex + ticks // TODO - find closest restore point before <---
-    val restorePoint = findClosestRestorePoint(targetTick, after)
-
-    runTicks = 0L
-    readPackets = 0L
-    processPackets = 0L
-    if (restorePoint != null) {
-      println("targeting $targetTick, found ${restorePoint.tickdex}")
-      println("regular skipping ${(targetTick - restorePoint.tickdex)}")
-
-      // Once
-//      if (fake)
-//        restorePoint.restoreFake()
-//      else
-      restorePoint.restore()
-    } else {
-      println("No restore points found")
-    }
-//    for (fuckYou in 0 until (targetTick - (restorePoint?.tickdex ?: 0))) {
-//    mc.loadWorld(null)
-//    initReplay()
-//    Replay.tickdex = 0
-//    for (fuckYou in 0 until (restorePoints.last().tickdex)) {
-//      while (Keyboard.next()) {
-//      }
-//      replayOneTick()
-//    }
-//    val ticks = restorePoints.last().tickdex
-
-    println("Skipped forward ${ticks / 20.0} seconds.")
-    println("Tick Time: ${runTicks / 1000000.0}ms")
-    println("Event Read Time: ${readPackets / 1000000.0}ms")
-    println("Packet Process Time: ${processPackets / 1000000.0}ms")
-    for ((oh, oho) in packetsTime.asIterable().sortedBy { it -> it.value }) {
-      println("Packets: $oh, ${oho / 1000000}")
-    }
-//    ((mc as MinecraftAccessor).timer as TimerAccessor).setTickLength(100f)
-  }
-
-  fun rewind(ticks: Int) {
-    // go to beginning??!?!
-    mc.loadWorld(null)
-    initReplay()
-    val skip = max(tickdex - ticks, 0)
-    tickdex = 0
-    skipForward(skip, false, false)
   }
 }

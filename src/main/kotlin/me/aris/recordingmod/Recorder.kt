@@ -97,33 +97,6 @@ object Recorder {
 
   fun endTick() {
     tickdex++
-    writeLaterLock.lock()
-    ClientEvent.TickEnd.write(PacketBuffer(toWritelater))
-    writeLaterLock.unlock()
-  }
-
-  // 1 Second
-  private const val SAVE_FREQ = 5
-
-  // TODO - is this actually ideal, no idea
-  // but it will help us find bugs for now
-  var ticksToSave = SAVE_FREQ
-  var lastInteraction = 0L
-
-  // TODO - horses, minecarts, oh my
-  fun shouldSavePoint(): Boolean {
-    ticksToSave--
-    if (ticksToSave <= 0
-      && mc.currentScreen == null
-      && !mc.player.isHandActive
-      && lastInteraction + 5 < tickdex // .25 seconds since last interaction
-      && (mc.player as EntityPlayerSPAccessor).sprintToggleTimer <= 0
-      && (mc.player as EntityPlayerAccessor).flyToggleTimer <= 0
-      && !mc.playerController.isHittingBlock
-    ) {
-      ticksToSave = SAVE_FREQ
-      return true
-    }
-    return false
+    ClientEvent.writeClientEvent(ClientEvent.TickEnd)
   }
 }

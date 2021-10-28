@@ -731,7 +731,7 @@ public class NetHandlerReplayClient extends NetHandlerPlayClient {
     Entity entity = this.world.getEntityByID(packetIn.getEntityId());
 
     if (entity == null) {
-      LOGGER.warn("Received passengers for unknown entity");
+//      LOGGER.warn("Received passengers for unknown entity");
     } else {
       boolean flag = entity.isRidingOrBeingRiddenBy(this.client.player);
       entity.removePassengers();

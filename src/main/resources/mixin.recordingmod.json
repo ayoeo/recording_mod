@@ -17,6 +17,7 @@
     "NetworkPlayerInfoAccessor",
     "PacketThreadUtilMixin",
     "PlayerControllerMPMixin",
+    "SPacketMultiBlockChangeAccessor",
     "TimerAccessor",
     "TimerMixin"
   ]

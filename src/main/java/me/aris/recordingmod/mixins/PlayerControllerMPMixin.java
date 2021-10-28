@@ -1,6 +1,6 @@
 package me.aris.recordingmod.mixins;
 
-import me.aris.recordingmod.Replay;
+import me.aris.recordingmod.LiteModRecordingModKt;
 import net.minecraft.client.multiplayer.PlayerControllerMP;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -15,7 +15,7 @@ abstract class PlayerControllerMPMixin {
 
   @Inject(at = @At("HEAD"), method = "updateController", cancellable = true)
   private void in(CallbackInfo ci) {
-    if (Replay.INSTANCE.getReplaying()) {
+    if (LiteModRecordingModKt.getActiveReplay() != null) {
       this.syncCurrentPlayItem();
       ci.cancel();
     }

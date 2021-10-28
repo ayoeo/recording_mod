@@ -8,10 +8,6 @@ import com.mumfrey.liteloader.modconfig.ConfigPanel
 import com.mumfrey.liteloader.modconfig.ConfigStrategy
 import com.mumfrey.liteloader.modconfig.ExposableOptions
 import me.aris.recordingmod.Recorder.recording
-import me.aris.recordingmod.Replay.fakeTicking
-import me.aris.recordingmod.Replay.replayOneTickPackets
-import me.aris.recordingmod.Replay.rewind
-import me.aris.recordingmod.Replay.skipForward
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.ScaledResolution
 import net.minecraft.client.renderer.GlStateManager
@@ -22,6 +18,8 @@ import kotlin.math.pow
 
 val mc: Minecraft
   get() = Minecraft.getMinecraft()
+
+var activeReplay: Replay? = null
 
 @ExposableOptions(
   strategy = ConfigStrategy.Unversioned,
@@ -67,7 +65,6 @@ class LiteModDRImprovement : LiteMod, Tickable, HUDRenderListener, Configurable 
 }
 
 var paused = false
-
 fun checkKeybinds(): Boolean {
   val keys = mutableListOf<Int>()
   while (Keyboard.next()) {
@@ -91,27 +88,35 @@ fun checkKeybinds(): Boolean {
 
       Keyboard.KEY_A -> {
         // SKIP MOMENT SKIPMENT
-        rewind(20 * 5)
+        activeReplay?.skipBackwards(20 * 10)
+        println("Skipping back 10 seconds...")
         return true
       }
 
       Keyboard.KEY_Q -> {
         // SKIP MOMENT SKIPMENT
-        rewind(20 * 30)
+        LittleTestPerformanceTrackerThing.resetTimings()
+        activeReplay?.skipBackwards(20 * 30)
+        LittleTestPerformanceTrackerThing.printTimings()
+        println("Skipping back 30 seconds...")
         return true
       }
 
       Keyboard.KEY_F -> {
         // SKIP MOMENT SKIPMENT
-        skipForward(20 * 60 * 5, true, true)
-        println("Normal Skip Player: ${mc.player.positionVector}")
+        LittleTestPerformanceTrackerThing.resetTimings()
+        activeReplay?.skipForward(20 * 60 * 5)
+        LittleTestPerformanceTrackerThing.printTimings()
+
+        println("Skipping 5 minutes...")
+
         return true
       }
 
       Keyboard.KEY_D -> {
         // SKIP MOMENT SKIPMENT
-        skipForward(20 * 10, true, false)
-        println("Broken Skip Player: ${mc.player.positionVector}")
+        activeReplay?.skipForward(20 * 10)
+        println("Skipping 10 seconds...")
         return true
       }
     }
@@ -134,9 +139,6 @@ fun preGameLoop(): Boolean {
 
   return checkKeybinds()
 
-  // TODO - force pause if we've reached the end of the replay
-  // TODO - force pause if we've reached the end of the replay
-
   // TODO - also something something wait for tick do X renders change partialticks
   //  just really fuck with the timer and make it work how we want it to
 
@@ -147,16 +149,18 @@ fun preGameLoop(): Boolean {
 
 // Return true to cancel the tick
 fun preTick(): Boolean {
+  if (activeReplay?.reachedEnd() == true) {
+    paused = true
+  }
+
   if (paused) {
     return true
   }
 
-  if (!fakeTicking) {
-    replayOneTickPackets(null)
+  activeReplay?.playNextTick()
 
-    mc.player?.rotationYaw = Replay.nextYaw
-    mc.player?.rotationPitch = Replay.nextPitch
-  }
+  mc.player?.rotationYaw = ReplayState.nextYaw
+  mc.player?.rotationPitch = ReplayState.nextPitch
 
   return false
 }
