@@ -9,7 +9,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.EntityPlayerSP;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.gui.inventory.GuiContainer;
-import net.minecraft.client.settings.GameSettings;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
@@ -20,9 +19,6 @@ import javax.annotation.Nullable;
 
 @Mixin(Minecraft.class)
 abstract class MinecraftMixin {
-  @Shadow
-  public GameSettings gameSettings;
-
   @Shadow
   @Nullable
   public GuiScreen currentScreen;
@@ -40,9 +36,9 @@ abstract class MinecraftMixin {
 
 
   @Inject(at = @At("HEAD"), method = "displayGuiScreen")
-  private void onGuiClose(CallbackInfo ci) {
+  private void onGuiClose(@Nullable GuiScreen guiScreenIn, CallbackInfo ci) {
     if (Recorder.INSTANCE.getRecording()) {
-      if (!(currentScreen instanceof GuiContainer)) {
+      if (!(currentScreen instanceof GuiContainer) && guiScreenIn == null) {
         ClientEvent.writeClientEvent(ClientEvent.CloseScreen.INSTANCE);
       }
     }
@@ -58,7 +54,7 @@ abstract class MinecraftMixin {
 
   @Inject(at = @At("HEAD"), method = "runTick", cancellable = true)
   private void preTick(CallbackInfo ci) {
-    if (Recorder.INSTANCE.getRecording()) {
+    if (Recorder.INSTANCE.getRecording() && player != null) {
       ClientEvent.writeClientEvent(new ClientEvent.Look());
 
       // Save key state if we're in a gui
@@ -74,19 +70,11 @@ abstract class MinecraftMixin {
 
   @Inject(at = @At("TAIL"), method = "runTick")
   private void postTick(CallbackInfo ci) {
-//    if (ReplayState.INSTANCE.getNextPositionInfo() != null) {
-//      ReplayState.INSTANCE.getNextPositionInfo().runit();
-//    }
-
     if (Recorder.INSTANCE.getRecording()) {
       if (player != null) {
         ClientEvent.writeClientEvent(new ClientEvent.Absolutes());
       }
       Recorder.INSTANCE.endTick();
-//      if (Recorder.INSTANCE.shouldSavePoint()) {
-//        ClientEvent.writeClientEvent(new ClientEvent.SavePoint());
-
-//      }
     }
   }
 
@@ -95,10 +83,6 @@ abstract class MinecraftMixin {
     if (Recorder.INSTANCE.getRecording()) {
       // Save current key state
       ClientEvent.writeClientEvent(new ClientEvent.HeldItem());
-
-      if (gameSettings.keyBindUseItem.isKeyDown()) {
-        Recorder.INSTANCE.setLastInteraction(Recorder.INSTANCE.getTickdex());
-      }
     }
   }
 

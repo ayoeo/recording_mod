@@ -1,9 +1,8 @@
 package me.aris.recordingmod.mixins;
 
 import me.aris.recordingmod.Recorder;
-import net.minecraft.network.INetHandler;
-import net.minecraft.network.Packet;
-import net.minecraft.network.PacketThreadUtil;
+import net.minecraft.client.Minecraft;
+import net.minecraft.network.*;
 import net.minecraft.network.play.server.SPacketJoinGame;
 import net.minecraft.util.IThreadListener;
 import org.spongepowered.asm.mixin.Mixin;
@@ -19,13 +18,25 @@ abstract class PacketThreadUtilMixin {
     T processor,
     IThreadListener scheduler,
     CallbackInfo ci
-  ) {
-    if (scheduler.isCallingFromMinecraftThread()) {
+  ) throws Exception {
+    if (Minecraft.getMinecraft().isSingleplayer() && scheduler.isCallingFromMinecraftThread()) {
       if (packet instanceof SPacketJoinGame) {
         Recorder.INSTANCE.joinGame();
       }
 
-      Recorder.INSTANCE.savePacket(packet);
+      if (Recorder.INSTANCE.getRecording()) {
+        Integer id = EnumConnectionState.PLAY.getPacketId(EnumPacketDirection.CLIENTBOUND, packet);
+        PacketBuffer packetDataBuffer = new PacketBuffer(Recorder.INSTANCE.getPacketData());
+        packet.writePacketData(packetDataBuffer);
+
+        // The packet needs to be ok we have to safe it keep the packet safe
+        packet.readPacketData(new PacketBuffer(Recorder.INSTANCE.getPacketData().duplicate()));
+
+        if (id != null) {
+          Recorder.INSTANCE.savePacket(id, packetDataBuffer);
+        }
+        Recorder.INSTANCE.getPacketData().clear();
+      }
     }
   }
 }

@@ -41,14 +41,14 @@ class LiteModDRImprovement : LiteMod, Tickable, HUDRenderListener, Configurable 
   }
 
   override fun onPreRenderHUD(screenWidth: Int, screenHeight: Int) {
-    GlStateManager.pushMatrix()
-    val scaleFactor = ScaledResolution(mc).scaleFactor.toDouble()
-    val scale = scaleFactor / scaleFactor.pow(2.0)
-    GlStateManager.scale(scale, scale, 1.0)
+//    GlStateManager.pushMatrix()
+//    val scaleFactor = ScaledResolution(mc).scaleFactor.toDouble()
+//    val scale = scaleFactor / scaleFactor.pow(2.0)
+//    GlStateManager.scale(scale, scale, 1.0)
 
     // TODO - draw stuff maybe idk man
 
-    GlStateManager.popMatrix()
+//    GlStateManager.popMatrix()
   }
 
   override fun onPostRenderHUD(screenWidth: Int, screenHeight: Int) {
@@ -88,7 +88,9 @@ fun checkKeybinds(): Boolean {
 
       Keyboard.KEY_A -> {
         // SKIP MOMENT SKIPMENT
+        LittleTestPerformanceTrackerThing.resetTimings()
         activeReplay?.skipBackwards(20 * 10)
+        LittleTestPerformanceTrackerThing.printTimings()
         println("Skipping back 10 seconds...")
         return true
       }
@@ -113,10 +115,32 @@ fun checkKeybinds(): Boolean {
         return true
       }
 
+      Keyboard.KEY_G -> {
+        // SKIP MOMENT SKIPMENT
+        LittleTestPerformanceTrackerThing.resetTimings()
+        activeReplay?.skipForward(20 * 60 * 60)
+        LittleTestPerformanceTrackerThing.printTimings()
+
+        println("Skipping 5 minutes...")
+
+        return true
+      }
+
       Keyboard.KEY_D -> {
         // SKIP MOMENT SKIPMENT
+        LittleTestPerformanceTrackerThing.resetTimings()
         activeReplay?.skipForward(20 * 10)
+        LittleTestPerformanceTrackerThing.printTimings()
         println("Skipping 10 seconds...")
+        return true
+      }
+
+      Keyboard.KEY_O -> {
+        // SKIP MOMENT SKIPMENT
+        LittleTestPerformanceTrackerThing.resetTimings()
+        activeReplay?.skipTo(73533)
+        LittleTestPerformanceTrackerThing.printTimings()
+        println("SKIPPING TO THAT ONE PLACE YOU LIKE")
         return true
       }
     }
@@ -159,6 +183,7 @@ fun preTick(): Boolean {
 
   activeReplay?.playNextTick()
 
+  // TODO - put this back lol
   mc.player?.rotationYaw = ReplayState.nextYaw
   mc.player?.rotationPitch = ReplayState.nextPitch
 

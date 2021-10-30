@@ -2,7 +2,7 @@
   "required": true,
   "minVersion": "0.4.10",
   "package": "me.aris.recordingmod.mixins",
-  "refmap": "mixin.recordingmod.refmap.json",
+  "refmap": "mixins.recordingmod.refmap.json",
   "compatibilityLevel": "JAVA_8",
   "mixins": [
     "EntityLivingBaseAccessor",
@@ -14,6 +14,7 @@
     "MinecraftAccessor",
     "MinecraftMixin",
     "MovementInputFromOptionsMixin",
+    "NettyPacketDecoderMixin",
     "NetworkPlayerInfoAccessor",
     "PacketThreadUtilMixin",
     "PlayerControllerMPMixin",

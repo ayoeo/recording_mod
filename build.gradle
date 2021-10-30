@@ -41,16 +41,6 @@ minecraft {
   runDir = "run"
 }
 
-mixin {
-  defaultObfuscationEnv notch
-}
-
-sourceSets {
-  main {
-    refMap = "mixin.recordingmod.refmap.json"
-  }
-}
-
 
 repositories {
   mavenCentral()
@@ -69,17 +59,29 @@ compileTestKotlin {
   }
 }
 
+mixin {
+  defaultObfuscationEnv notch
+}
+
 litemod {
   json {
     name = "recording_mod"
     mcversion = "1.12.2"
     description = "even better than obs"
-    mixinConfigs += "mixin.recordingmod.json"
+    mixinConfigs += "mixins.recordingmod.json"
+  }
+
+}
+
+sourceSets {
+  main {
+    ext.refMap = "mixins.recordingmod.refmap.json"
   }
 }
 
+
 jar {
   from litemod.outputs
-
-  from { configurations.compileClasspath.collect { it.isDirectory() ? it : zipTree(it) } }
+  from { configurations.compileClasspath.filter { it.name.contains("kotlin") }.collect { it.isDirectory() ? it : zipTree(it) } }
 }
+

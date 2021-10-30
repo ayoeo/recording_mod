@@ -2,11 +2,6 @@ package me.aris.recordingmod
 
 import io.netty.buffer.ByteBuf
 import io.netty.buffer.Unpooled
-import me.aris.recordingmod.mixins.EntityPlayerAccessor
-import me.aris.recordingmod.mixins.EntityPlayerSPAccessor
-import net.minecraft.network.EnumConnectionState
-import net.minecraft.network.EnumPacketDirection
-import net.minecraft.network.Packet
 import net.minecraft.network.PacketBuffer
 import sun.awt.Mutex
 import java.io.BufferedOutputStream
@@ -24,7 +19,7 @@ object Recorder {
 
   @Volatile
   var recording = false
-  var recordingThread: Thread? = null
+  private var recordingThread: Thread? = null
 
   fun joinGame() {
     tickdex = 0
@@ -33,8 +28,9 @@ object Recorder {
     val date = Calendar.getInstance().time
     val formatter = SimpleDateFormat("yyyy_MM_dd_HH_mm_ss")
     val formatedDate = formatter.format(date)
-    println("ok... $formatedDate.rec")
-    val filePath = File("$formatedDate.rec")
+
+    File("recordings").mkdirs()
+    val filePath = File("recordings/$formatedDate.rec")
     recordingFile = BufferedOutputStream(FileOutputStream(filePath, true))
 
     recording = true
@@ -46,9 +42,8 @@ object Recorder {
         toWritelater.readBytes(recordingFile, index)
         toWritelater.clear()
         writeLaterLock.unlock()
-        println("Wrote $index bytes to file.")
 
-        Thread.sleep(1000)
+        Thread.sleep(250)
       }
     }
     recordingThread!!.start()
@@ -64,22 +59,18 @@ object Recorder {
   // TODO - option to 'mark' current tick as a POI type thing
 
   // Reusable buffers for writing packet data
-  private val packetData = Unpooled.directBuffer(1024 * 1024 * 20)
+//  private val packetDatazz = Unpooled.directBuffer(1024 * 1024 * 20)
+  val packetData = Unpooled.directBuffer(1024 * 1024 * 20);
   private val packetHeader = Unpooled.directBuffer(64)
-  fun savePacket(packet: Packet<*>) {
-    val id =
-      EnumConnectionState.PLAY.getPacketId(EnumPacketDirection.CLIENTBOUND, packet) ?: return
-
+  fun savePacket(id: Int, packetBuffer: PacketBuffer) {
+//    println("saving packet: $id ${packetBuffer.readableBytes()}")
     // PACKET DATA MOMENT
-    val packetDataBuffer = PacketBuffer(packetData)
-    packet.writePacketData(packetDataBuffer)
+//    val packetDataBuffer = PacketBuffer(packetData)
+//    packet.writePacketData(packetDataBuffer)
 
-    // The packet needs to be ok we have to safe it keep the packet safe
-    packet.readPacketData(PacketBuffer(packetData.duplicate()))
 
-    val packetSize = packetData.writerIndex()
+    val packetSize = packetBuffer.readableBytes()
     val packetHeaderBuffer = PacketBuffer(packetHeader)
-
     packetHeaderBuffer.writeVarInt(id)
     packetHeaderBuffer.writeVarInt(packetSize)
 
@@ -88,10 +79,10 @@ object Recorder {
       toWritelater.capacity((toWritelater.capacity() * 1.5).toInt())
     }
     packetHeader.readBytes(toWritelater, packetHeaderBuffer.writerIndex())
-    packetData.readBytes(toWritelater, packetSize)
+    packetBuffer.readBytes(toWritelater, packetSize)
     writeLaterLock.unlock()
 
-    packetData.clear()
+//    packetData.clear()
     packetHeader.clear()
   }
 

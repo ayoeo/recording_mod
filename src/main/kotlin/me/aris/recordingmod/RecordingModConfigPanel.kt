@@ -10,11 +10,9 @@ class RecordingModConfigPanel : AbstractConfigPanel() {
 
   override fun onPanelHidden() = Unit
 
-
   override fun addOptions(host: ConfigPanelHost?) {
     this.addControl(GuiButton(0, 0, 0, "Help")) {
-//      activeReplay = Replay(File("anfun"))
-      activeReplay = Replay(File("lla"))
+      activeReplay = Replay(File("recordings/help"))
       activeReplay?.restart()
     }
   }

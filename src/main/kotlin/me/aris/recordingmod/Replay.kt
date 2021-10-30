@@ -20,6 +20,7 @@ object ReplayState {
 
   var nextYaw = 0f
   var nextPitch = 0f
+  var nextAbsoluteState: ClientEvent.Absolutes? = null
 }
 
 class Replay(replayFile: File) {
@@ -29,7 +30,7 @@ class Replay(replayFile: File) {
 
   var netHandler = NetHandlerReplayClient(
     mc,
-    null,
+    null, // TODO - make this the replay screen !!!!!
     GameProfile(UUID.randomUUID(), "Guy")
   )
 
@@ -120,12 +121,19 @@ class Replay(replayFile: File) {
         SPacketDestroyEntities()
       )
 
+    val respawnID =
+      EnumConnectionState.PLAY.getPacketId(
+        EnumPacketDirection.CLIENTBOUND,
+        SPacketRespawn()
+      )
+
     val ignoredPacketInfo = hashSetOf<Pair<Int, Int>>()
 
     // WOAH!
     val loadedChunks = hashMapOf<Pair<Int, Int>, Pair<Int, Int>>()
     val changedBlockChunks = hashMapOf<Pair<Int, Int>, MutableList<Pair<Int, Int>>>()
     val spawnedEntities = hashMapOf<Int, Pair<Int, Int>>()
+    var lastRespawnPacket: Pair<Int, Int>? = null
 
     // pre process
     val preprocesstime = measureNanoTime {
@@ -134,6 +142,29 @@ class Replay(replayFile: File) {
         for ((i2, rawPacket) in tick.serverPackets.withIndex()) {
           // OH YEAH
           val packetProcessIndex = Pair(i, i2)
+
+          // TODO - temp stuff for respawn test it'll be split tho
+          // TODO - temp stuff for respawn test it'll be split tho
+          if (rawPacket.packetID == respawnID) {
+
+            // Ignore all other respawn packets
+//      //            lastRespawnPacket?.apply {
+//      //              ignoredPacketInfo.add(this)
+//      //            }
+//      //            lastRespawnPacket = packetProcessIndex
+
+            // all packets  DIEEE
+//            if (rewindingTempThing) /* ONLY WHEN REWIND*/ ignoredPacketInfo.addAll(
+//              packmentpacketmoment
+//            )
+//            ignoredPacketInfo.add(packetProcessIndex)
+//            packmentpacketmoment.clear()
+          }
+//          if (rawPacket.packetID != joinID) {
+//            packmentpacketmoment.add(packetProcessIndex)
+//          }
+          // TODO - temp stuff for respawn test it'll be split tho
+          // TODO - temp stuff for respawn test it'll be split tho
 
           // Block changes
           if (rawPacket.packetID == multiBlockChangeID) {
@@ -237,10 +268,9 @@ class Replay(replayFile: File) {
   fun restart() {
     // TODO - store uuid and stuff and name in the replay file
     this.tickdex = 0
-    // TODO - get this from the same thing that stores replay metadata ^^^
-    mc.gameSettings.thirdPersonView = 0;
 
     mc.ingameGUI.chatGUI.clearChatMessages(true)
+    mc.gameSettings.showDebugInfo = true
     this.netHandler = NetHandlerReplayClient(
       mc,
       null,
@@ -251,60 +281,126 @@ class Replay(replayFile: File) {
 
   fun skipBackwards(ticks: Int) {
     val targetTick = (this.tickdex - ticks).coerceAtLeast(0)
+    skipTo(targetTick)
+  }
+
+  // TODO - EVERYTING IS SKIPTO NOW HAHAHHAHAHAHHA
+  fun skipTo(targetTick: Int) {
+    val playerDimension = mc.player.dimension
     this.restart()
 
-    skipForward(targetTick)
-  }
-
-  // TODO - idk
-//  fun skipTo(tickdex: Int) {
-//    val targetTick = this.tickdex.coerceIn(0, this.ticks.size - 1)
-//    skipForward(targetTick)
-//  }
-
-  fun skipForward(ticks: Int) {
-    var targetTick = (this.tickdex + ticks).coerceAtMost(this.ticks.size - 1)
-//    targetTick = 6030
-//    targetTick = 21000
-    println("TARGET TICK: $targetTick")
-//    targetTick = 60 * 20
-
-    this.playUntil(targetTick)
-//    for (i in 0 until targetTick - tickdex) {
-//      this.playNextTick()
-//
-//      // TODO - track perspective change, inventory open, close, ALL INVENTORY STUFF
-//      // and yeah just like stuff like that replay it and it's fine
-//    }
-  }
-
-  fun reachedEnd() = this.tickdex >= this.ticks.size
-
-  // TODO - restore
-  private fun findClosestRestorePoint(
-    targetTick: Int,
-    after: Boolean
-  ): Pair<Int, ClientEvent.SavePoint>? {
-//    val targetTick = 18000
-    var current: Pair<Int, ClientEvent.SavePoint>? = null
-    // TODO - binary search
-    if (!after) {
-      for ((tickdex, point) in restorePoints) {
-        if (tickdex < targetTick) {
-          current = Pair(tickdex, point)
-        } else {
-          break
+    // Find last tickdex that contains a respawn packet
+    val respawnID =
+      EnumConnectionState.PLAY.getPacketId(
+        EnumPacketDirection.CLIENTBOUND,
+        SPacketRespawn()
+      )
+    var latestTickdex = 0
+    val latestRespawnPacketAndOthers = mutableListOf<Pair<Int, Int>>()
+    for (i in 0 until targetTick) {
+      val tick = this.ticks[i]
+      for ((i2, rawPacket) in tick.serverPackets.withIndex()) {
+        // TODO - flip the order of these when changing dimensions
+        val packetProcessIndex = Pair(i, i2)
+        if (latestTickdex == i) {
+          // store packets
+          latestRespawnPacketAndOthers.add(packetProcessIndex)
         }
-      }
-    } else {
-      for ((tickdex, point) in restorePoints) {
-        if (tickdex > targetTick) {
-          current = Pair(tickdex, point)
-          break
+        if (rawPacket.packetID == respawnID) {
+          latestTickdex = i
+          latestRespawnPacketAndOthers.clear()
+
+          // TODO - make sure this works with changing dimensions and like in singleplayer??????
+          // TODO - make sure this works with changing dimensions and like in singleplayer??????
+          // TODO - make sure this works with changing dimensions and like in singleplayer??????
+          if ((rawPacket.cookPacket() as SPacketRespawn).dimensionID != playerDimension) {
+            latestRespawnPacketAndOthers.add(packetProcessIndex)
+          }
         }
       }
     }
 
-    return current
+    // Run that join packet
+    this.ticks[0].serverPackets.firstOrNull()?.cookPacket()?.processPacket(netHandler)
+    val firstTick = this.ticks[latestTickdex]
+
+    // Replay important packets that bungee like doesn't care about???
+    val teamsID =
+      EnumConnectionState.PLAY.getPacketId(
+        EnumPacketDirection.CLIENTBOUND,
+        SPacketTeams()
+      )
+    val scoreboardID =
+      EnumConnectionState.PLAY.getPacketId(
+        EnumPacketDirection.CLIENTBOUND,
+        SPacketScoreboardObjective()
+      )
+    val bossBarID =
+      EnumConnectionState.PLAY.getPacketId(
+        EnumPacketDirection.CLIENTBOUND,
+        SPacketUpdateBossInfo()
+      )
+    val playerListID =
+      EnumConnectionState.PLAY.getPacketId(
+        EnumPacketDirection.CLIENTBOUND,
+        SPacketPlayerListItem()
+      )
+    for (i in 0 until latestTickdex) {
+      val tick = this.ticks[i]
+      for ((i2, rawPacket) in tick.serverPackets.withIndex()) {
+        if (rawPacket.packetID == teamsID
+          || rawPacket.packetID == bossBarID
+          || rawPacket.packetID == scoreboardID
+          || rawPacket.packetID == playerListID
+        // TODO - add more stuff here if it's crashing lol
+        ) {
+          rawPacket.cookPacket().processPacket(netHandler)
+        }
+      }
+    }
+
+    // Respawn + extra packets that tick
+    latestRespawnPacketAndOthers.forEach { (i, i2) ->
+      val prespawn = this.ticks[i].serverPackets[i2].cookPacket()
+      this.ticks[i].serverPackets[i2].cookPacket().processPacket(netHandler)
+    }
+
+    // Client stuff too I guess
+    firstTick.clientEvents.forEach { event ->
+      event.processEvent(ReplayState)
+    }
+
+    this.tickdex = latestTickdex + 1
+
+    // Ok we're good
+    this.playUntil(targetTick)
+
+    // idk horse
+//    mc.player.dismountRidingEntity()
+//    mc.runTick()
+
+    // TODO - idk chunk load idk idk idk fix it better idk help
+    // TODO - idk chunk load idk idk idk fix it better idk help
+    // TODO - idk chunk load idk idk idk fix it better idk help
+    // TODO - idk chunk load idk idk idk fix it better idk help
+    // TODO - idk chunk load idk idk idk fix it better idk help
+    // but don't ruuuunnn itttt
+//    for (i in 0..20) {
+//      mc.runTick()
+//    }
   }
+
+  fun skipForward(ticks: Int) {
+    val targetTick = (this.tickdex + ticks).coerceAtMost(this.ticks.size - 1)
+
+    println("SKIPPING!!! TO TARGET TICK: $targetTick")
+    if (ticks > 20 * 60) {
+      this.skipTo(targetTick)
+    } else {
+      this.playUntil(targetTick)
+    }
+    println("SKIPPED!!! TO TARGET TICK: $targetTick")
+  }
+
+  fun reachedEnd() = this.tickdex >= this.ticks.size
 }

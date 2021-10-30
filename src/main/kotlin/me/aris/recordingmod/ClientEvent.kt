@@ -41,10 +41,12 @@ class RawServerPacket(val packetID: Int, val size: Int, val buffer: ByteBuf) {
 }
 
 class ReplayTick(
-  private val clientEvents: List<ClientEvent>,
+  val clientEvents: List<ClientEvent>,
   val serverPackets: List<RawServerPacket>
 ) {
   fun replayFull() {
+    ReplayState.nextAbsoluteState?.runitbaby(false)
+
     serverPackets.forEach { processPacket(it) }
 
     clientEvents.forEach { event ->
@@ -53,6 +55,8 @@ class ReplayTick(
   }
 
   fun replayFast(ourIndex: Int, ignorePackets: HashSet<Pair<Int, Int>>) {
+    ReplayState.nextAbsoluteState?.runitbaby(true)
+
     serverPackets.withIndex()
       .filterNot { Pair(ourIndex, it.index) in ignorePackets }
       .forEach { processPacket(it.value) }
@@ -93,7 +97,7 @@ sealed class ClientEvent {
       mc.gameSettings.keyBindSneak,
       mc.gameSettings.keyBindAttack,
       mc.gameSettings.keyBindUseItem,
-      mc.gameSettings.keyBindTogglePerspective,
+      mc.gameSettings.keyBindTogglePerspective, // TODO - remove later
       mc.gameSettings.keyBindPlayerList,
       mc.gameSettings.keyBindPickBlock,
       mc.gameSettings.keyBindInventory,
@@ -192,6 +196,9 @@ sealed class ClientEvent {
 
   class Absolutes : ClientEvent() {
     private var creativeFlying = false
+    private var thirdPersonView = 0
+    private var sprintTicksLeft = 0
+    private var isSprinting = false
     private var itemInUseCount = 0
 
     private var ridingID = 0
@@ -203,7 +210,11 @@ sealed class ClientEvent {
 
     override fun loadFromBuffer(buffer: PacketBuffer) {
       this.creativeFlying = buffer.readBoolean()
-      this.itemInUseCount = buffer.readVarInt() // TODO - FINISH SAVE IT APPLY IT
+      this.thirdPersonView = buffer.readVarInt()
+      this.sprintTicksLeft = buffer.readVarInt()
+      this.isSprinting = buffer.readBoolean()
+      this.itemInUseCount = buffer.readVarInt()
+
       this.ridingID = buffer.readVarInt()
       if (this.ridingID != -1) {
         this.ridingYaw = buffer.readFloat()
@@ -215,6 +226,9 @@ sealed class ClientEvent {
 
     override fun writeToBuffer(buffer: PacketBuffer) {
       buffer.writeBoolean(mc.player.capabilities.isFlying)
+      buffer.writeVarInt(mc.gameSettings.thirdPersonView)
+      buffer.writeVarInt(mc.player.sprintingTicksLeft)
+      buffer.writeBoolean(mc.player.isSprinting)
       buffer.writeVarInt(mc.player.itemInUseCount)
 
       val riding = mc.player?.ridingEntity
@@ -234,15 +248,36 @@ sealed class ClientEvent {
     }
 
     override fun processEvent(replayState: ReplayState) {
+      replayState.nextAbsoluteState = this
+    }
+
+    fun runitbaby(isFastReplay: Boolean) {
       val riding = if (this.ridingID == -1) null else mc.world?.getEntityByID(this.ridingID)
-      if (riding != mc.player.ridingEntity) {
-        println("RIDING MISMATCH FUCKKKK ME $ridingID")
+
+
+      if (riding != null && !isFastReplay) {
+        mc.player.startRiding(riding, true)
+      } else {
+        mc.player.dismountRidingEntity()
       }
 
+      if (isFastReplay) {
+//        println("FAST FAST SET ITS POSITION OH MY GOD")
+        mc.player.setPositionAndUpdate(this.position.x, this.position.y, this.position.z)
+        riding?.setPositionAndUpdate(this.position.x, this.position.y, this.position.z)
+      }
+
+      // mmm
       mc.player.capabilities.isFlying = this.creativeFlying
+      mc.gameSettings.thirdPersonView = this.thirdPersonView
+      mc.gameSettings.thirdPersonView = this.thirdPersonView
+      mc.player.isSprinting = this.isSprinting
+      mc.player.sprintingTicksLeft = this.sprintTicksLeft
       (mc.player as EntityLivingBaseAccessor).setActiveItemStackUseCount(this.itemInUseCount)
+
+
       val setPosOfThisThing = riding ?: mc.player
-      setPosOfThisThing.setPosition(this.position.x, this.position.y, this.position.z)
+      setPosOfThisThing.setPositionAndUpdate(this.position.x, this.position.y, this.position.z)
       setPosOfThisThing.motionX = this.motion.x
       setPosOfThisThing.motionY = this.motion.y
       setPosOfThisThing.motionZ = this.motion.z
@@ -251,23 +286,6 @@ sealed class ClientEvent {
         riding.rotationYaw = this.ridingYaw
         riding.rotationPitch = this.ridingPitch
       }
-    }
-
-    fun runit() {
-//      val riding = mc.world?.getEntityByID(this.ridingID)
-//      if (riding != null && mc.player.ridingEntity != riding) {
-//        println("PUT ON ENTITY")
-//        mc.player.startRiding(riding, true)
-//      } else if (riding == null && mc.player.ridingEntity != null) {
-//        println("TAKE OFF ENTITY")
-//        mc.player.dismountRidingEntity()
-//      }
-
-//      val setPosOfThisThing = riding ?: mc.player
-//      if (setPosOfThisThing.positionVector != this.position) {
-//        println("HAD TO CHANGE POS ")
-//        setPosOfThisThing.setPosition(this.position.x, this.position.y, this.position.z)
-//      }
     }
   }
 

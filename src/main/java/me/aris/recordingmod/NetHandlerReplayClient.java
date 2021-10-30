@@ -49,6 +49,7 @@ import net.minecraft.item.ItemMap;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.crafting.IRecipe;
 import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.network.EnumPacketDirection;
 import net.minecraft.network.NetworkManager;
 import net.minecraft.network.Packet;
 import net.minecraft.network.PacketBuffer;
@@ -128,7 +129,7 @@ public class NetHandlerReplayClient extends NetHandlerPlayClient {
   private final Random avRandomizer = new Random();
 
   public NetHandlerReplayClient(Minecraft mcIn, GuiScreen p_i46300_2_, GameProfile profileIn) {
-    super(mcIn, p_i46300_2_, null, profileIn);
+    super(mcIn, p_i46300_2_, new NetworkManager(EnumPacketDirection.CLIENTBOUND), profileIn);
     this.client = mcIn;
     this.guiScreenServer = p_i46300_2_;
     this.profile = profileIn;
@@ -1531,21 +1532,24 @@ public class NetHandlerReplayClient extends NetHandlerPlayClient {
    */
   public void handleScoreboardObjective(SPacketScoreboardObjective packetIn) {
 //    PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.client);
-    Scoreboard scoreboard = this.world.getScoreboard();
+    try {
+      Scoreboard scoreboard = this.world.getScoreboard();
 
-    if (packetIn.getAction() == 0) {
-      ScoreObjective scoreobjective = scoreboard.addScoreObjective(packetIn.getObjectiveName(), IScoreCriteria.DUMMY);
-      scoreobjective.setDisplayName(packetIn.getObjectiveValue());
-      scoreobjective.setRenderType(packetIn.getRenderType());
-    } else {
-      ScoreObjective scoreobjective1 = scoreboard.getObjective(packetIn.getObjectiveName());
+      if (packetIn.getAction() == 0) {
+        ScoreObjective scoreobjective = scoreboard.addScoreObjective(packetIn.getObjectiveName(), IScoreCriteria.DUMMY);
+        scoreobjective.setDisplayName(packetIn.getObjectiveValue());
+        scoreobjective.setRenderType(packetIn.getRenderType());
+      } else {
+        ScoreObjective scoreobjective1 = scoreboard.getObjective(packetIn.getObjectiveName());
 
-      if (packetIn.getAction() == 1) {
-        scoreboard.removeObjective(scoreobjective1);
-      } else if (packetIn.getAction() == 2) {
-        scoreobjective1.setDisplayName(packetIn.getObjectiveValue());
-        scoreobjective1.setRenderType(packetIn.getRenderType());
+        if (packetIn.getAction() == 1) {
+          scoreboard.removeObjective(scoreobjective1);
+        } else if (packetIn.getAction() == 2) {
+          scoreobjective1.setDisplayName(packetIn.getObjectiveValue());
+          scoreobjective1.setRenderType(packetIn.getRenderType());
+        }
       }
+    } catch (Exception ignored) {
     }
   }
 
@@ -1591,48 +1595,51 @@ public class NetHandlerReplayClient extends NetHandlerPlayClient {
    */
   public void handleTeams(SPacketTeams packetIn) {
 //    PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.client);
-    Scoreboard scoreboard = this.world.getScoreboard();
-    ScorePlayerTeam scoreplayerteam;
+    try {
+      Scoreboard scoreboard = this.world.getScoreboard();
+      ScorePlayerTeam scoreplayerteam;
 
-    if (packetIn.getAction() == 0) {
-      scoreplayerteam = scoreboard.createTeam(packetIn.getName());
-    } else {
-      scoreplayerteam = scoreboard.getTeam(packetIn.getName());
-    }
-
-    if (packetIn.getAction() == 0 || packetIn.getAction() == 2) {
-      scoreplayerteam.setDisplayName(packetIn.getDisplayName());
-      scoreplayerteam.setPrefix(packetIn.getPrefix());
-      scoreplayerteam.setSuffix(packetIn.getSuffix());
-      scoreplayerteam.setColor(TextFormatting.fromColorIndex(packetIn.getColor()));
-      scoreplayerteam.setFriendlyFlags(packetIn.getFriendlyFlags());
-      Team.EnumVisible team$enumvisible = Team.EnumVisible.getByName(packetIn.getNameTagVisibility());
-
-      if (team$enumvisible != null) {
-        scoreplayerteam.setNameTagVisibility(team$enumvisible);
+      if (packetIn.getAction() == 0) {
+        scoreplayerteam = scoreboard.createTeam(packetIn.getName());
+      } else {
+        scoreplayerteam = scoreboard.getTeam(packetIn.getName());
       }
 
-      Team.CollisionRule team$collisionrule = Team.CollisionRule.getByName(packetIn.getCollisionRule());
+      if (packetIn.getAction() == 0 || packetIn.getAction() == 2) {
+        scoreplayerteam.setDisplayName(packetIn.getDisplayName());
+        scoreplayerteam.setPrefix(packetIn.getPrefix());
+        scoreplayerteam.setSuffix(packetIn.getSuffix());
+        scoreplayerteam.setColor(TextFormatting.fromColorIndex(packetIn.getColor()));
+        scoreplayerteam.setFriendlyFlags(packetIn.getFriendlyFlags());
+        Team.EnumVisible team$enumvisible = Team.EnumVisible.getByName(packetIn.getNameTagVisibility());
 
-      if (team$collisionrule != null) {
-        scoreplayerteam.setCollisionRule(team$collisionrule);
+        if (team$enumvisible != null) {
+          scoreplayerteam.setNameTagVisibility(team$enumvisible);
+        }
+
+        Team.CollisionRule team$collisionrule = Team.CollisionRule.getByName(packetIn.getCollisionRule());
+
+        if (team$collisionrule != null) {
+          scoreplayerteam.setCollisionRule(team$collisionrule);
+        }
       }
-    }
 
-    if (packetIn.getAction() == 0 || packetIn.getAction() == 3) {
-      for (String s : packetIn.getPlayers()) {
-        scoreboard.addPlayerToTeam(s, packetIn.getName());
+      if (packetIn.getAction() == 0 || packetIn.getAction() == 3) {
+        for (String s : packetIn.getPlayers()) {
+          scoreboard.addPlayerToTeam(s, packetIn.getName());
+        }
       }
-    }
 
-    if (packetIn.getAction() == 4) {
-      for (String s1 : packetIn.getPlayers()) {
-        scoreboard.removePlayerFromTeam(s1, scoreplayerteam);
+      if (packetIn.getAction() == 4) {
+        for (String s1 : packetIn.getPlayers()) {
+          scoreboard.removePlayerFromTeam(s1, scoreplayerteam);
+        }
       }
-    }
 
-    if (packetIn.getAction() == 1) {
-      scoreboard.removeTeam(scoreplayerteam);
+      if (packetIn.getAction() == 1) {
+        scoreboard.removeTeam(scoreplayerteam);
+      }
+    } catch (Exception ignored) {
     }
   }
 
@@ -1720,11 +1727,10 @@ public class NetHandlerReplayClient extends NetHandlerPlayClient {
   /**
    * Returns this the NetworkManager instance registered with this NetworkHandlerPlayClient
    */
-  public NetworkManager getNetworkManager() {
+//  public NetworkManager getNetworkManager() {
 //    return this.netManager;
-    return null;
-  }
-
+//    return null;
+//  }
   public Collection<NetworkPlayerInfo> getPlayerInfoMap() {
     return this.playerInfoMap.values();
   }
