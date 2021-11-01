@@ -41,6 +41,9 @@ minecraft {
   runDir = "run"
 }
 
+task cleanBuild(dependsOn: [build, clean]) {}
+build.mustRunAfter(clean)
+
 
 repositories {
   mavenCentral()

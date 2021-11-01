@@ -26,7 +26,7 @@ var activeReplay: Replay? = null
   filename = "recording_mod.json",
   aggressive = true
 )
-class LiteModDRImprovement : LiteMod, Tickable, HUDRenderListener, Configurable {
+class LiteModRecordingMod : LiteMod, Tickable, Configurable {
   override fun upgradeSettings(v: String?, c: File?, o: File?) {}
 
   override fun onTick(
@@ -38,20 +38,6 @@ class LiteModDRImprovement : LiteMod, Tickable, HUDRenderListener, Configurable 
     if (!inGame && recording) {
       Recorder.leaveGame()
     }
-  }
-
-  override fun onPreRenderHUD(screenWidth: Int, screenHeight: Int) {
-//    GlStateManager.pushMatrix()
-//    val scaleFactor = ScaledResolution(mc).scaleFactor.toDouble()
-//    val scale = scaleFactor / scaleFactor.pow(2.0)
-//    GlStateManager.scale(scale, scale, 1.0)
-
-    // TODO - draw stuff maybe idk man
-
-//    GlStateManager.popMatrix()
-  }
-
-  override fun onPostRenderHUD(screenWidth: Int, screenHeight: Int) {
   }
 
   override fun getName(): String = "Recording Mod"
@@ -138,7 +124,8 @@ fun checkKeybinds(): Boolean {
       Keyboard.KEY_O -> {
         // SKIP MOMENT SKIPMENT
         LittleTestPerformanceTrackerThing.resetTimings()
-        activeReplay?.skipTo(73533)
+//        activeReplay?.skipTo(73533)
+        activeReplay?.skipTo(772)
         LittleTestPerformanceTrackerThing.printTimings()
         println("SKIPPING TO THAT ONE PLACE YOU LIKE")
         return true

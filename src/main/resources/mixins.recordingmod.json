@@ -5,6 +5,7 @@
   "refmap": "mixins.recordingmod.refmap.json",
   "compatibilityLevel": "JAVA_8",
   "mixins": [
+    "EntityHorseAccessor",
     "EntityLivingBaseAccessor",
     "EntityPlayerAccessor",
     "EntityPlayerSPAccessor",

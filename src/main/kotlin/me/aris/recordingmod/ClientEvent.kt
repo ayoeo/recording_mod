@@ -9,6 +9,7 @@ import me.aris.recordingmod.PacketIDsLol.spawnPaintingID
 import me.aris.recordingmod.PacketIDsLol.spawnPlayerID
 import me.aris.recordingmod.mixins.*
 import net.minecraft.client.gui.inventory.GuiContainer
+import net.minecraft.entity.passive.AbstractHorse
 import net.minecraft.network.EnumConnectionState
 import net.minecraft.network.EnumPacketDirection
 import net.minecraft.network.Packet
@@ -199,6 +200,7 @@ sealed class ClientEvent {
   protected open fun writeToBuffer(buffer: PacketBuffer) = Unit
 
   object TickEnd : ClientEvent()
+
   object CloseScreen : ClientEvent() {
     override fun processEvent(replayState: ReplayState) {
       if (mc.currentScreen is GuiContainer) {
@@ -257,6 +259,7 @@ sealed class ClientEvent {
     private var ridingID = 0
     private var ridingYaw = 0f
     private var ridingPitch = 0f
+    private var ridingRearing = false
 
     private lateinit var position: Vec3d
     private lateinit var motion: Vec3d
@@ -272,6 +275,7 @@ sealed class ClientEvent {
       if (this.ridingID != -1) {
         this.ridingYaw = buffer.readFloat()
         this.ridingPitch = buffer.readFloat()
+        this.ridingRearing = buffer.readBoolean()
       }
       this.position = Vec3d(buffer.readDouble(), buffer.readDouble(), buffer.readDouble())
       this.motion = Vec3d(buffer.readDouble(), buffer.readDouble(), buffer.readDouble())
@@ -290,6 +294,9 @@ sealed class ClientEvent {
       if (riding != null) {
         buffer.writeFloat(riding.rotationYaw)
         buffer.writeFloat(riding.rotationPitch)
+        if (riding is AbstractHorse) {
+          buffer.writeBoolean(riding.isRearing)
+        }
       }
 
       buffer.writeDouble(riding?.posX ?: mc.player.posX)
@@ -318,6 +325,11 @@ sealed class ClientEvent {
         riding?.setPositionAndUpdate(this.position.x, this.position.y, this.position.z)
       }
 
+      // REAR MOMENT
+      if (riding is AbstractHorse) {
+        riding.isRearing = this.ridingRearing
+      }
+
       // mmm
       mc.player.capabilities.isFlying = this.creativeFlying
       mc.gameSettings.thirdPersonView = this.thirdPersonView
@@ -326,12 +338,13 @@ sealed class ClientEvent {
       mc.player.sprintingTicksLeft = this.sprintTicksLeft
       (mc.player as EntityLivingBaseAccessor).setActiveItemStackUseCount(this.itemInUseCount)
 
-
       val setPosOfThisThing = riding ?: mc.player
-      setPosOfThisThing.setPositionAndUpdate(this.position.x, this.position.y, this.position.z)
-      setPosOfThisThing.motionX = this.motion.x
-      setPosOfThisThing.motionY = this.motion.y
-      setPosOfThisThing.motionZ = this.motion.z
+      if (Keyboard.isKeyDown(Keyboard.KEY_M)) {
+        setPosOfThisThing.setPosition(this.position.x, this.position.y, this.position.z)
+        setPosOfThisThing.motionX = this.motion.x
+        setPosOfThisThing.motionY = this.motion.y
+        setPosOfThisThing.motionZ = this.motion.z
+      }
 
       if (riding != null) {
         riding.rotationYaw = this.ridingYaw
