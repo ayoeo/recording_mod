@@ -2,11 +2,26 @@ package me.aris.recordingmod
 
 import com.mojang.authlib.GameProfile
 import io.netty.buffer.Unpooled
+import me.aris.recordingmod.PacketIDsLol.blockChangeID
+import me.aris.recordingmod.PacketIDsLol.bossBarID
+import me.aris.recordingmod.PacketIDsLol.chunkDataID
+import me.aris.recordingmod.PacketIDsLol.chunkUnloadID
+import me.aris.recordingmod.PacketIDsLol.destroyEntityID
+import me.aris.recordingmod.PacketIDsLol.multiBlockChangeID
+import me.aris.recordingmod.PacketIDsLol.playerListID
+import me.aris.recordingmod.PacketIDsLol.respawnID
+import me.aris.recordingmod.PacketIDsLol.scoreboardID
+import me.aris.recordingmod.PacketIDsLol.spawnEXPOrbID
+import me.aris.recordingmod.PacketIDsLol.spawnGlobalID
+import me.aris.recordingmod.PacketIDsLol.spawnMobID
+import me.aris.recordingmod.PacketIDsLol.spawnObjectID
+import me.aris.recordingmod.PacketIDsLol.spawnPaintingID
+import me.aris.recordingmod.PacketIDsLol.spawnPlayerID
+import me.aris.recordingmod.PacketIDsLol.teamsID
 import me.aris.recordingmod.mixins.SPacketMultiBlockChangeAccessor
-import net.minecraft.network.EnumConnectionState
-import net.minecraft.network.EnumPacketDirection
 import net.minecraft.network.PacketBuffer
 import net.minecraft.network.play.server.*
+import net.minecraft.util.math.MathHelper
 import java.io.File
 import java.util.*
 import kotlin.system.measureNanoTime
@@ -77,61 +92,13 @@ class Replay(replayFile: File) {
   }
 
   private fun playUntil(targetTick: Int) {
-    val chunkDataID =
-      EnumConnectionState.PLAY.getPacketId(EnumPacketDirection.CLIENTBOUND, SPacketChunkData())
-    val multiBlockChangeID =
-      EnumConnectionState.PLAY.getPacketId(
-        EnumPacketDirection.CLIENTBOUND,
-        SPacketMultiBlockChange()
-      )
-    val blockChangeID =
-      EnumConnectionState.PLAY.getPacketId(
-        EnumPacketDirection.CLIENTBOUND,
-        SPacketBlockChange()
-      )
-    val chunkUnloadID =
-      EnumConnectionState.PLAY.getPacketId(EnumPacketDirection.CLIENTBOUND, SPacketUnloadChunk())
-    val spawnPlayerID =
-      EnumConnectionState.PLAY.getPacketId(EnumPacketDirection.CLIENTBOUND, SPacketSpawnPlayer())
-    val spawnMobID =
-      EnumConnectionState.PLAY.getPacketId(EnumPacketDirection.CLIENTBOUND, SPacketSpawnMob())
-    val spawnEXPOrbID =
-      EnumConnectionState.PLAY.getPacketId(
-        EnumPacketDirection.CLIENTBOUND,
-        SPacketSpawnExperienceOrb()
-      )
-    val spawnPaintingID =
-      EnumConnectionState.PLAY.getPacketId(
-        EnumPacketDirection.CLIENTBOUND,
-        SPacketSpawnPainting()
-      )
-    val spawnObjectID =
-      EnumConnectionState.PLAY.getPacketId(
-        EnumPacketDirection.CLIENTBOUND,
-        SPacketSpawnObject()
-      )
-    val spawnGlobalID =
-      EnumConnectionState.PLAY.getPacketId(
-        EnumPacketDirection.CLIENTBOUND,
-        SPacketSpawnGlobalEntity()
-      )
-    val destroyEntityID =
-      EnumConnectionState.PLAY.getPacketId(
-        EnumPacketDirection.CLIENTBOUND,
-        SPacketDestroyEntities()
-      )
-
-    val respawnID =
-      EnumConnectionState.PLAY.getPacketId(
-        EnumPacketDirection.CLIENTBOUND,
-        SPacketRespawn()
-      )
-
     val ignoredPacketInfo = hashSetOf<Pair<Int, Int>>()
 
     // WOAH!
     val loadedChunks = hashMapOf<Pair<Int, Int>, Pair<Int, Int>>()
     val changedBlockChunks = hashMapOf<Pair<Int, Int>, MutableList<Pair<Int, Int>>>()
+    val ignoredChunks =
+      hashMapOf<Pair<Int, Int>, MutableList<Pair<Pair<Int, Int>, Pair<Int, Int>>>>()
     val spawnedEntities = hashMapOf<Int, Pair<Int, Int>>()
     var lastRespawnPacket: Pair<Int, Int>? = null
 
@@ -139,32 +106,9 @@ class Replay(replayFile: File) {
     val preprocesstime = measureNanoTime {
       for (i in 0 until targetTick - tickdex) {
         val tick = this.ticks[this.tickdex + i]
-        for ((i2, rawPacket) in tick.serverPackets.withIndex()) {
+        tick.serverPackets.withIndex().forEach { (i2, rawPacket) ->
           // OH YEAH
           val packetProcessIndex = Pair(i, i2)
-
-          // TODO - temp stuff for respawn test it'll be split tho
-          // TODO - temp stuff for respawn test it'll be split tho
-          if (rawPacket.packetID == respawnID) {
-
-            // Ignore all other respawn packets
-//      //            lastRespawnPacket?.apply {
-//      //              ignoredPacketInfo.add(this)
-//      //            }
-//      //            lastRespawnPacket = packetProcessIndex
-
-            // all packets  DIEEE
-//            if (rewindingTempThing) /* ONLY WHEN REWIND*/ ignoredPacketInfo.addAll(
-//              packmentpacketmoment
-//            )
-//            ignoredPacketInfo.add(packetProcessIndex)
-//            packmentpacketmoment.clear()
-          }
-//          if (rawPacket.packetID != joinID) {
-//            packmentpacketmoment.add(packetProcessIndex)
-//          }
-          // TODO - temp stuff for respawn test it'll be split tho
-          // TODO - temp stuff for respawn test it'll be split tho
 
           // Block changes
           if (rawPacket.packetID == multiBlockChangeID) {
@@ -211,7 +155,7 @@ class Replay(replayFile: File) {
           // Entity despawns
           if (rawPacket.packetID == destroyEntityID) {
             val packet = rawPacket.cookPacket() as SPacketDestroyEntities
-            for (entID in packet.entityIDs) {
+            packet.entityIDs.forEach { entID ->
               val spawnIndex = spawnedEntities[entID]
               if (spawnIndex != null) {
                 ignoredPacketInfo.add(spawnIndex)
@@ -230,6 +174,11 @@ class Replay(replayFile: File) {
               ignoredPacketInfo.add(loadIndex)
               ignoredPacketInfo.add(packetProcessIndex)
 
+              // Track ignored chunks in case we need them back
+              ignoredChunks.getOrPut(chunkCoords) {
+                mutableListOf()
+              }.add(Pair(loadIndex, packetProcessIndex))
+
               // Only remove unload chunk once!!!
               loadedChunks.remove(chunkCoords)
             }
@@ -238,6 +187,58 @@ class Replay(replayFile: File) {
             if (changedIndices != null) {
               ignoredPacketInfo.addAll(changedIndices)
               changedBlockChunks.remove(chunkCoords)
+            }
+          }
+        }
+      }
+
+      for (i in 0 until targetTick - tickdex) {
+        val tick = this.ticks[this.tickdex + i]
+        tick.serverPackets.withIndex().forEach { (i2, rawPacket) ->
+          val packetProcessIndex = Pair(i, i2)
+
+          // Who cares if the entity isn't spawned anyway right xd
+          if (packetProcessIndex in ignoredPacketInfo) {
+            return@forEach
+          }
+
+          val chunkCoords = when (rawPacket.packetID) {
+            spawnPlayerID -> (rawPacket.cookPacket() as SPacketSpawnPlayer).let { Pair(it.x, it.z) }
+            spawnMobID -> (rawPacket.cookPacket() as SPacketSpawnMob).let { Pair(it.x, it.z) }
+            spawnEXPOrbID -> (rawPacket.cookPacket() as SPacketSpawnExperienceOrb).let {
+              Pair(
+                it.x,
+                it.z
+              )
+            }
+            spawnPaintingID -> (rawPacket.cookPacket() as SPacketSpawnPainting).let {
+              Pair(
+                it.position.x.toDouble(),
+                it.position.z.toDouble()
+              )
+            }
+            spawnObjectID -> (rawPacket.cookPacket() as SPacketSpawnObject).let { Pair(it.x, it.z) }
+            spawnGlobalID -> (rawPacket.cookPacket() as SPacketSpawnGlobalEntity).let {
+              Pair(
+                it.x,
+                it.z
+              )
+            }
+            else -> null
+          }
+
+          if (chunkCoords != null) {
+            val packetsToRestore = ignoredChunks[chunkCoords.let {
+              Pair(
+                MathHelper.floor(it.first / 16.0),
+                MathHelper.floor(it.second / 16.0)
+              )
+            }]
+
+            // Allow these chunks through because they're necessary for the entity to spawn correctly
+            packetsToRestore?.forEach {
+              ignoredPacketInfo.remove(it.first)
+              ignoredPacketInfo.remove(it.second)
             }
           }
         }
@@ -268,6 +269,7 @@ class Replay(replayFile: File) {
   fun restart() {
     // TODO - store uuid and stuff and name in the replay file
     this.tickdex = 0
+    ReplayState.nextAbsoluteState = null
 
     mc.ingameGUI.chatGUI.clearChatMessages(true)
     mc.gameSettings.showDebugInfo = true
@@ -290,16 +292,12 @@ class Replay(replayFile: File) {
     this.restart()
 
     // Find last tickdex that contains a respawn packet
-    val respawnID =
-      EnumConnectionState.PLAY.getPacketId(
-        EnumPacketDirection.CLIENTBOUND,
-        SPacketRespawn()
-      )
+
     var latestTickdex = 0
     val latestRespawnPacketAndOthers = mutableListOf<Pair<Int, Int>>()
     for (i in 0 until targetTick) {
       val tick = this.ticks[i]
-      for ((i2, rawPacket) in tick.serverPackets.withIndex()) {
+      tick.serverPackets.withIndex().forEach { (i2, rawPacket) ->
         // TODO - flip the order of these when changing dimensions
         val packetProcessIndex = Pair(i, i2)
         if (latestTickdex == i) {
@@ -325,43 +323,21 @@ class Replay(replayFile: File) {
     val firstTick = this.ticks[latestTickdex]
 
     // Replay important packets that bungee like doesn't care about???
-    val teamsID =
-      EnumConnectionState.PLAY.getPacketId(
-        EnumPacketDirection.CLIENTBOUND,
-        SPacketTeams()
-      )
-    val scoreboardID =
-      EnumConnectionState.PLAY.getPacketId(
-        EnumPacketDirection.CLIENTBOUND,
-        SPacketScoreboardObjective()
-      )
-    val bossBarID =
-      EnumConnectionState.PLAY.getPacketId(
-        EnumPacketDirection.CLIENTBOUND,
-        SPacketUpdateBossInfo()
-      )
-    val playerListID =
-      EnumConnectionState.PLAY.getPacketId(
-        EnumPacketDirection.CLIENTBOUND,
-        SPacketPlayerListItem()
-      )
     for (i in 0 until latestTickdex) {
       val tick = this.ticks[i]
-      for ((i2, rawPacket) in tick.serverPackets.withIndex()) {
-        if (rawPacket.packetID == teamsID
-          || rawPacket.packetID == bossBarID
-          || rawPacket.packetID == scoreboardID
-          || rawPacket.packetID == playerListID
+      tick.serverPackets.filter {
+        it.packetID == teamsID
+          || it.packetID == bossBarID
+          || it.packetID == scoreboardID
+          || it.packetID == playerListID
         // TODO - add more stuff here if it's crashing lol
-        ) {
-          rawPacket.cookPacket().processPacket(netHandler)
-        }
+      }.forEach {
+        it.cookPacket().processPacket(netHandler)
       }
     }
 
     // Respawn + extra packets that tick
     latestRespawnPacketAndOthers.forEach { (i, i2) ->
-      val prespawn = this.ticks[i].serverPackets[i2].cookPacket()
       this.ticks[i].serverPackets[i2].cookPacket().processPacket(netHandler)
     }
 
@@ -379,12 +355,32 @@ class Replay(replayFile: File) {
 //    mc.player.dismountRidingEntity()
 //    mc.runTick()
 
-    // TODO - idk chunk load idk idk idk fix it better idk help
-    // TODO - idk chunk load idk idk idk fix it better idk help
-    // TODO - idk chunk load idk idk idk fix it better idk help
-    // TODO - idk chunk load idk idk idk fix it better idk help
-    // TODO - idk chunk load idk idk idk fix it better idk help
     // but don't ruuuunnn itttt
+    // TODO - rUN MORE TICKS
+    // TODO - rUN MORE TICKS
+    // TODO - rUN MORE TICKS
+    // TODO - rUN MORE TICKS
+    // TODO - rUN MORE TICKS
+    // TODO - rUN MORE TICKS
+    // TODO - rUN MORE TICKS
+    // TODO - rUN MORE TICKS
+    // TODO - rUN MORE TICKS
+    // TODO - rUN MORE TICKS
+    // TODO - rUN MORE TICKS
+    // TODO - rUN MORE TICKS
+    // TODO - rUN MORE TICKS
+    // TODO - rUN MORE TICKS
+    // TODO - rUN MORE TICKS
+    // TODO - rUN MORE TICKS
+    // TODO - rUN MORE TICKS
+    // TODO - rUN MORE TICKS
+    // TODO - rUN MORE TICKS
+    // TODO - rUN MORE TICKS
+    // TODO - rUN MORE TICKS
+    // TODO - rUN MORE TICKS
+    // TODO - rUN MORE TICKS
+    // TODO - rUN MORE TICKS
+    // TODO - rUN MORE TICKS
 //    for (i in 0..20) {
 //      mc.runTick()
 //    }

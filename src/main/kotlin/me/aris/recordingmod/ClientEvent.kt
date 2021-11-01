@@ -1,15 +1,22 @@
 package me.aris.recordingmod
 
 import io.netty.buffer.ByteBuf
-import me.aris.recordingmod.mixins.EntityLivingBaseAccessor
-import me.aris.recordingmod.mixins.KeyBindingAccessor
-import me.aris.recordingmod.mixins.MinecraftAccessor
+import me.aris.recordingmod.PacketIDsLol.spawnEXPOrbID
+import me.aris.recordingmod.PacketIDsLol.spawnGlobalID
+import me.aris.recordingmod.PacketIDsLol.spawnMobID
+import me.aris.recordingmod.PacketIDsLol.spawnObjectID
+import me.aris.recordingmod.PacketIDsLol.spawnPaintingID
+import me.aris.recordingmod.PacketIDsLol.spawnPlayerID
+import me.aris.recordingmod.mixins.*
 import net.minecraft.client.gui.inventory.GuiContainer
 import net.minecraft.network.EnumConnectionState
 import net.minecraft.network.EnumPacketDirection
 import net.minecraft.network.Packet
 import net.minecraft.network.PacketBuffer
+import net.minecraft.network.play.server.*
+import net.minecraft.util.math.MathHelper
 import net.minecraft.util.math.Vec3d
+import org.lwjgl.input.Keyboard
 
 class SavePoint(
   val posX: Double,
@@ -57,9 +64,55 @@ class ReplayTick(
   fun replayFast(ourIndex: Int, ignorePackets: HashSet<Pair<Int, Int>>) {
     ReplayState.nextAbsoluteState?.runitbaby(true)
 
+    fun isChunkLoaded(x: Double, z: Double) =
+      !mc.world.getChunk(MathHelper.floor(x / 16.0), MathHelper.floor(z / 16.0)).isEmpty
+
     serverPackets.withIndex()
       .filterNot { Pair(ourIndex, it.index) in ignorePackets }
-      .forEach { processPacket(it.value) }
+      .forEach { (i, rawPacket) ->
+        val fixedUpPacketSoHorsesArentBad = when (rawPacket.packetID) {
+          spawnPlayerID -> (rawPacket.cookPacket() as SPacketSpawnPlayer).apply {
+            if (!isChunkLoaded(this.x, this.z)) {
+              (this as SPacketSpawnPlayerAccessor).setX(mc.player.posX)
+              (this as SPacketSpawnPlayerAccessor).setY(-500.0)
+              (this as SPacketSpawnPlayerAccessor).setZ(mc.player.posZ)
+            }
+          }
+          spawnMobID -> (rawPacket.cookPacket() as SPacketSpawnMob).apply {
+            if (this.entityType == 100) {
+              println("FUCKIN HORSE YEAYYAAYAYA: ${this.x}, ${this.z}, (${mc.player.posX}, ${mc.player.posZ}")
+            }
+            if (!isChunkLoaded(this.x, this.z)) {
+              println("TRIED SPAWNING BAD MOB in chunk!!! at xx, chunkY")
+              (this as SPacketSpawnMobAccessor).setX(mc.player.posX)
+              (this as SPacketSpawnMobAccessor).setY(-500.0)
+              (this as SPacketSpawnMobAccessor).setZ(mc.player.posZ)
+            }
+          }
+          spawnEXPOrbID -> (rawPacket.cookPacket() as SPacketSpawnExperienceOrb).apply {}
+          spawnPaintingID -> (rawPacket.cookPacket() as SPacketSpawnPainting).apply {}
+          spawnObjectID -> (rawPacket.cookPacket() as SPacketSpawnObject).apply {}
+          spawnGlobalID -> (rawPacket.cookPacket() as SPacketSpawnGlobalEntity).apply {}
+
+          else -> null
+        }
+
+        if (fixedUpPacketSoHorsesArentBad != null) {
+          fixedUpPacketSoHorsesArentBad.processPacket(activeReplay!!.netHandler)
+        } else {
+          processPacket(rawPacket)
+        }
+//        if (id != null) {
+//          val spawnedEntity = mc.world.getEntityByID(id)!!
+
+//          if (spawnedEntity is EntityHorse) {
+//            println("TRIED SPAWNING $id in chunk!!! at $chunkX, $chunkY")
+//          }
+//          if (mc.world.getChunk(chunkX, chunkY) is EmptyChunk) {
+//            println("TRIED SPAWNING $id in empty chunk at $chunkX, $chunkY")
+//          }
+//        }
+      }
 
     clientEvents.forEach { event ->
 //      ReplayState.nextPositionInfo?.runit()
@@ -254,7 +307,6 @@ sealed class ClientEvent {
     fun runitbaby(isFastReplay: Boolean) {
       val riding = if (this.ridingID == -1) null else mc.world?.getEntityByID(this.ridingID)
 
-
       if (riding != null && !isFastReplay) {
         mc.player.startRiding(riding, true)
       } else {
@@ -262,7 +314,6 @@ sealed class ClientEvent {
       }
 
       if (isFastReplay) {
-//        println("FAST FAST SET ITS POSITION OH MY GOD")
         mc.player.setPositionAndUpdate(this.position.x, this.position.y, this.position.z)
         riding?.setPositionAndUpdate(this.position.x, this.position.y, this.position.z)
       }

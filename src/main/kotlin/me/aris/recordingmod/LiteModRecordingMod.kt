@@ -80,7 +80,7 @@ fun checkKeybinds(): Boolean {
     }
   }
 
-  for (key in keys) {
+  keys.forEach { key ->
     when (key) {
       Keyboard.KEY_SPACE -> {
         paused = !paused
