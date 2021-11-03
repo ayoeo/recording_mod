@@ -1,14 +1,14 @@
 package me.aris.recordingmod.mixins;
 
 import kotlin.Pair;
-import me.aris.recordingmod.ClientEvent;
-import me.aris.recordingmod.LiteModRecordingModKt;
-import me.aris.recordingmod.Recorder;
-import me.aris.recordingmod.ReplayState;
+import me.aris.recordingmod.*;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.EntityPlayerSP;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.gui.inventory.GuiContainer;
+import org.lwjgl.input.Keyboard;
+import org.lwjgl.input.Mouse;
+import org.lwjgl.opengl.Display;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
@@ -26,8 +26,17 @@ abstract class MinecraftMixin {
   @Shadow
   public EntityPlayerSP player;
 
+  @Shadow
+  protected abstract void resize(int width, int height);
+
+  @Shadow
+  private static int debugFPS;
+
   @Inject(at = @At("HEAD"), method = "runGameLoop", cancellable = true)
   private void preGameLoop(CallbackInfo ci) {
+    if (Keyboard.isKeyDown(Keyboard.KEY_M)) {
+      this.resize(15360, 8640);
+    }
     if (LiteModRecordingModKt.getActiveReplay() != null) {
       if (LiteModRecordingModKt.preGameLoop())
         ci.cancel();
@@ -60,6 +69,24 @@ abstract class MinecraftMixin {
       // Save key state if we're in a gui
       if (currentScreen != null) {
         ClientEvent.writeClientEvent(new ClientEvent.SetKeybinds());
+
+        // Gui Recording owwaaah
+        float adjX = (float) Mouse.getX() / (float) Display.getWidth();
+        float adjY = (float) (Display.getHeight() - Mouse.getY()) / (float) Display.getHeight();
+        Recorder.INSTANCE.getCursorPositions().add(
+          new RenderedPosition(
+            1.0f,
+            new MousePosition(adjX, adjY)
+          )
+        );
+
+        ClientEvent.writeClientEvent(new ClientEvent.GuiState());
+        Recorder.INSTANCE.getCursorPositions().add(
+          new RenderedPosition(
+            0.0f,
+            new MousePosition(adjX, adjY)
+          )
+        );
       }
     } else if (LiteModRecordingModKt.getActiveReplay() != null) {
       if (LiteModRecordingModKt.preTick()) {

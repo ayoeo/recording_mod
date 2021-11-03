@@ -811,6 +811,7 @@ public class NetHandlerReplayClient extends NetHandlerPlayClient {
       this.doneLoadingTerrain = false;
       Scoreboard scoreboard = this.world.getScoreboard();
       this.world = new WorldClient(this, new WorldSettings(0L, packetIn.getGameType(), false, this.client.world.getWorldInfo().isHardcoreModeEnabled(), packetIn.getWorldType()), packetIn.getDimensionID(), packetIn.getDifficulty(), this.client.profiler);
+      System.out.println("RESPAWN HAHAHA " + this.world);
       this.world.setWorldScoreboard(scoreboard);
       this.client.loadWorld(this.world);
       this.client.player.dimension = packetIn.getDimensionID();

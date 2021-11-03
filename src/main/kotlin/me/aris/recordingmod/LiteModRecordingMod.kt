@@ -1,7 +1,6 @@
 package me.aris.recordingmod
 
 import com.mumfrey.liteloader.Configurable
-import com.mumfrey.liteloader.HUDRenderListener
 import com.mumfrey.liteloader.LiteMod
 import com.mumfrey.liteloader.Tickable
 import com.mumfrey.liteloader.modconfig.ConfigPanel
@@ -9,12 +8,9 @@ import com.mumfrey.liteloader.modconfig.ConfigStrategy
 import com.mumfrey.liteloader.modconfig.ExposableOptions
 import me.aris.recordingmod.Recorder.recording
 import net.minecraft.client.Minecraft
-import net.minecraft.client.gui.ScaledResolution
-import net.minecraft.client.renderer.GlStateManager
 import org.lwjgl.input.Keyboard
 import org.lwjgl.input.Mouse
 import java.io.File
-import kotlin.math.pow
 
 val mc: Minecraft
   get() = Minecraft.getMinecraft()
@@ -125,7 +121,7 @@ fun checkKeybinds(): Boolean {
         // SKIP MOMENT SKIPMENT
         LittleTestPerformanceTrackerThing.resetTimings()
 //        activeReplay?.skipTo(73533)
-        activeReplay?.skipTo(772)
+        activeReplay?.skipTo(651)
         LittleTestPerformanceTrackerThing.printTimings()
         println("SKIPPING TO THAT ONE PLACE YOU LIKE")
         return true
@@ -142,8 +138,8 @@ fun preGameLoop(): Boolean {
   // This also wipes keybinds to remove player interaction from the game
 
   // MOUSE WILL NOT BE
-  while (Mouse.next()) {
-  }
+  @Suppress("ControlFlowWithEmptyBody")
+  while (Mouse.next());
   Mouse.getDX()
   Mouse.getDY()
   // MOUSE WILL NOT BE

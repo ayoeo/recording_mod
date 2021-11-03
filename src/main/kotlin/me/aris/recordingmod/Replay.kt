@@ -30,6 +30,8 @@ object ReplayState {
   var nextKeybindingState = ClientEvent.trackedKeybinds.map {
     Pair(false, 0)
   }
+ 
+  var nextGuiState: ClientEvent.GuiState? = null
 
   var nextHeldItem = 0
 
@@ -41,7 +43,6 @@ object ReplayState {
 class Replay(replayFile: File) {
   private var tickdex = 0
   private val ticks: MutableList<ReplayTick> = mutableListOf()
-  private val restorePoints: HashMap<Int, ClientEvent.SavePoint> = hashMapOf()
 
   var netHandler = NetHandlerReplayClient(
     mc,
@@ -67,11 +68,6 @@ class Replay(replayFile: File) {
         if (i < 0) {
           val clientEvent = ClientEvent.eventFromId(i)
           clientEvent.loadFromBuffer(buffer)
-
-          // End of tick, push it
-          if (clientEvent is ClientEvent.SavePoint) {
-            this.restorePoints[this.ticks.size] = clientEvent
-          }
 
           if (clientEvent is ClientEvent.TickEnd) {
             this.ticks.add(ReplayTick(clientEvents.toList(), serverPackets.toList()))

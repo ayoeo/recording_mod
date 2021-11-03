@@ -7,8 +7,5 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 @Mixin(EntityLivingBase.class)
 public interface EntityLivingBaseAccessor {
   @Accessor
-  boolean getIsJumping();
-
-  @Accessor
   void setActiveItemStackUseCount(int a);
 }

@@ -6,6 +6,11 @@ import net.minecraft.network.play.server.*
 
 @Suppress("HasPlatformType")
 object PacketIDsLol {
+  val sleepID =
+    EnumConnectionState.PLAY.getPacketId(
+      EnumPacketDirection.CLIENTBOUND,
+      SPacketUseBed()
+    )
   val teamsID =
     EnumConnectionState.PLAY.getPacketId(
       EnumPacketDirection.CLIENTBOUND,

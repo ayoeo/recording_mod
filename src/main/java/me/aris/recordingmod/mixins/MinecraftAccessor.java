@@ -6,16 +6,10 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
 import org.spongepowered.asm.mixin.gen.Invoker;
 
-import java.util.Queue;
-import java.util.concurrent.FutureTask;
-
 @Mixin(Minecraft.class)
 public interface MinecraftAccessor {
   @Accessor
   Timer getTimer();
-
-  @Accessor
-  Queue<FutureTask<?>> getScheduledTasks();
 
   @Accessor
   int getLeftClickCounter();

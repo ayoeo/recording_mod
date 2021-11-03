@@ -19,7 +19,7 @@ abstract class PacketThreadUtilMixin {
     IThreadListener scheduler,
     CallbackInfo ci
   ) throws Exception {
-    if (Minecraft.getMinecraft().isSingleplayer() && scheduler.isCallingFromMinecraftThread()) {
+    if (Minecraft.getMinecraft().isSingleplayer() && Minecraft.getMinecraft().isCallingFromMinecraftThread()) {
       if (packet instanceof SPacketJoinGame) {
         Recorder.INSTANCE.joinGame();
       }
