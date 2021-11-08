@@ -1,9 +1,7 @@
 package me.aris.recordingmod.mixins;
 
 import com.mojang.authlib.GameProfile;
-import me.aris.recordingmod.ClientEvent;
 import me.aris.recordingmod.LiteModRecordingModKt;
-import me.aris.recordingmod.Recorder;
 import me.aris.recordingmod.ReplayState;
 import net.minecraft.client.entity.EntityPlayerSP;
 import net.minecraft.entity.player.EntityPlayer;
@@ -21,9 +19,9 @@ abstract class EntityPlayerSPMixin extends EntityPlayer {
 
   @Inject(at = @At("HEAD"), method = "closeScreen")
   private void closeScreen(CallbackInfo ci) {
-    if (Recorder.INSTANCE.getRecording()) {
-      ClientEvent.writeClientEvent(ClientEvent.CloseScreen.INSTANCE);
-    }
+//    if (Recorder.INSTANCE.getRecording()) {
+//      ClientEvent.writeClientEvent(ClientEvent.CloseScreen.INSTANCE);
+//    }
   }
 
   @Inject(at = @At("HEAD"), method = "onLivingUpdate")

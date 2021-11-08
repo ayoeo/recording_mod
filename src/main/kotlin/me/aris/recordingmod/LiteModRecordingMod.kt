@@ -7,6 +7,8 @@ import com.mumfrey.liteloader.modconfig.ConfigPanel
 import com.mumfrey.liteloader.modconfig.ConfigStrategy
 import com.mumfrey.liteloader.modconfig.ExposableOptions
 import me.aris.recordingmod.Recorder.recording
+import me.aris.recordingmod.mixins.MinecraftAccessor
+import me.aris.recordingmod.mixins.TimerAccessor
 import net.minecraft.client.Minecraft
 import org.lwjgl.input.Keyboard
 import org.lwjgl.input.Mouse
@@ -46,6 +48,7 @@ class LiteModRecordingMod : LiteMod, Tickable, Configurable {
   }
 }
 
+var skipping = false
 var paused = false
 fun checkKeybinds(): Boolean {
   val keys = mutableListOf<Int>()
@@ -121,7 +124,9 @@ fun checkKeybinds(): Boolean {
         // SKIP MOMENT SKIPMENT
         LittleTestPerformanceTrackerThing.resetTimings()
 //        activeReplay?.skipTo(73533)
-        activeReplay?.skipTo(651)
+//        activeReplay?.skipTo(1017 + 20)
+        activeReplay?.skipTo(585)
+//        activeReplay?.restart()
         LittleTestPerformanceTrackerThing.printTimings()
         println("SKIPPING TO THAT ONE PLACE YOU LIKE")
         return true
@@ -144,6 +149,12 @@ fun preGameLoop(): Boolean {
   Mouse.getDY()
   // MOUSE WILL NOT BE
 
+  if (Keyboard.isKeyDown(Keyboard.KEY_K)) {
+    ((mc as MinecraftAccessor).timer as TimerAccessor).tickLength = 1000f / 0.1f
+  } else {
+    ((mc as MinecraftAccessor).timer as TimerAccessor).tickLength = 1000f / 20f
+  }
+
   return checkKeybinds()
 
   // TODO - also something something wait for tick do X renders change partialticks
@@ -157,18 +168,20 @@ fun preGameLoop(): Boolean {
 // Return true to cancel the tick
 fun preTick(): Boolean {
   if (activeReplay?.reachedEnd() == true) {
-    paused = true
+    return false
   }
 
   if (paused) {
     return true
   }
 
+//  if (skipping) return false
   activeReplay?.playNextTick()
 
   // TODO - put this back lol
   mc.player?.rotationYaw = ReplayState.nextYaw
   mc.player?.rotationPitch = ReplayState.nextPitch
+
 
   return false
 }

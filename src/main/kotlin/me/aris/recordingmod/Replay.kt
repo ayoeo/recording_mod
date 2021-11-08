@@ -18,10 +18,17 @@ import me.aris.recordingmod.PacketIDsLol.spawnObjectID
 import me.aris.recordingmod.PacketIDsLol.spawnPaintingID
 import me.aris.recordingmod.PacketIDsLol.spawnPlayerID
 import me.aris.recordingmod.PacketIDsLol.teamsID
+import me.aris.recordingmod.mixins.GuiContainerCreativeAccessor
+import me.aris.recordingmod.mixins.MinecraftAccessor
 import me.aris.recordingmod.mixins.SPacketMultiBlockChangeAccessor
+import net.minecraft.client.Minecraft
+import net.minecraft.client.gui.ScaledResolution
+import net.minecraft.client.gui.inventory.GuiContainerCreative
 import net.minecraft.network.PacketBuffer
 import net.minecraft.network.play.server.*
+import net.minecraft.util.Util
 import net.minecraft.util.math.MathHelper
+import org.lwjgl.input.Mouse
 import java.io.File
 import java.util.*
 import kotlin.system.measureNanoTime
@@ -30,8 +37,13 @@ object ReplayState {
   var nextKeybindingState = ClientEvent.trackedKeybinds.map {
     Pair(false, 0)
   }
- 
+
   var nextGuiState: ClientEvent.GuiState? = null
+  var nextGuiStateButLikeAfterThisOneGodHelpUsAll: ClientEvent.GuiState? = null
+  var currentGuiState: ClientEvent.GuiState? = null
+  var nextGuiProcessState: ClientEvent.GuiState? = null
+  var scaledRes = Triple(640.0, 360.0, 1)
+  var systemTime: Long? = null
 
   var nextHeldItem = 0
 
@@ -41,18 +53,14 @@ object ReplayState {
 }
 
 class Replay(replayFile: File) {
-  private var tickdex = 0
-  private val ticks: MutableList<ReplayTick> = mutableListOf()
+  var tickdex = 0
+  val ticks: MutableList<ReplayTick> = mutableListOf()
 
   var netHandler = NetHandlerReplayClient(
     mc,
     null, // TODO - make this the replay screen !!!!!
     GameProfile(UUID.randomUUID(), "Guy")
   )
-
-  // TODO - option to store replay in memory or not
-  //  we would have to do some major tweaking to make that work, though
-  //  eh
 
   init {
     val loadTime = measureNanoTime {
@@ -88,6 +96,7 @@ class Replay(replayFile: File) {
   }
 
   private fun playUntil(targetTick: Int) {
+    skipping = true
     val ignoredPacketInfo = hashSetOf<Pair<Int, Int>>()
 
     // WOAH!
@@ -246,13 +255,21 @@ class Replay(replayFile: File) {
     val replayTime = measureNanoTime {
       for (i in 0 until targetTick - tickdex) {
         if (this.tickdex < this.ticks.size) {
+//          val mc = mc as MinecraftAccessor
+//          synchronized(mc.scheduledTasks)
+//          {
+//            while (!mc.scheduledTasks.isEmpty()) {
+//              Util.runTask(mc.scheduledTasks.poll(), null);
+//            }
+//          }
           this.ticks[this.tickdex].replayFast(i, ignoredPacketInfo)
-//          this.ticks[this.tickdex].replayFull()
           this.tickdex++
         }
       }
     }
     println("Replay time: ${replayTime / 1000000}")
+
+    skipping = false
   }
 
   fun playNextTick() {
@@ -263,18 +280,30 @@ class Replay(replayFile: File) {
   }
 
   fun restart() {
+    val scaled = ScaledResolution(mc)
+    ReplayState.scaledRes =
+      Triple(scaled.scaledWidth_double, scaled.scaledHeight_double, scaled.scaleFactor)
+
     // TODO - store uuid and stuff and name in the replay file
+    // TODO - when you do this, also store the creative tab (lmao)
+    // TODO - when you do this, also store the creative tab (lmao)
+    GuiContainerCreative.INVENTORY_BACKGROUND // remove if you want this to crash lmao
+    val selected = GuiContainerCreativeAccessor.getSelectedTabIndex()
+    GuiContainerCreativeAccessor.setSelectedTabIndex(0)
+    // TODO - when you do this, also store the creative tab (lmao)
+    // TODO - when you do this, also store the creative tab (lmao)
+
     this.tickdex = 0
     ReplayState.nextAbsoluteState = null
 
     mc.ingameGUI.chatGUI.clearChatMessages(true)
     mc.gameSettings.showDebugInfo = true
+    mc.loadWorld(null)
     this.netHandler = NetHandlerReplayClient(
       mc,
       null,
       GameProfile(UUID.randomUUID(), "Guy")
     )
-    mc.loadWorld(null)
   }
 
   fun skipBackwards(ticks: Int) {
@@ -282,110 +311,82 @@ class Replay(replayFile: File) {
     skipTo(targetTick)
   }
 
-  // TODO - EVERYTING IS SKIPTO NOW HAHAHHAHAHAHHA
   fun skipTo(targetTick: Int) {
-    val playerDimension = mc.player.dimension
+    skipping = true
     this.restart()
 
     // Find last tickdex that contains a respawn packet
+    if (targetTick > 20) {
+      val fastTargetTick = (targetTick - 20).coerceAtLeast(0)
+      var latestTickdex = 0
+      val latestRespawnPacketAndOthers = mutableListOf<Pair<Int, Int>>()
+      for (i in 0 until fastTargetTick) {
+        val tick = this.ticks[i]
+        tick.serverPackets.withIndex().forEach { (i2, rawPacket) ->
+          val packetProcessIndex = Pair(i, i2)
+          if (latestTickdex == i) {
+            // store packets
+            latestRespawnPacketAndOthers.add(packetProcessIndex)
+          }
+          if (rawPacket.packetID == respawnID) {
+            latestTickdex = i
+            latestRespawnPacketAndOthers.clear()
 
-    var latestTickdex = 0
-    val latestRespawnPacketAndOthers = mutableListOf<Pair<Int, Int>>()
-    for (i in 0 until targetTick) {
-      val tick = this.ticks[i]
-      tick.serverPackets.withIndex().forEach { (i2, rawPacket) ->
-        // TODO - flip the order of these when changing dimensions
-        val packetProcessIndex = Pair(i, i2)
-        if (latestTickdex == i) {
-          // store packets
-          latestRespawnPacketAndOthers.add(packetProcessIndex)
-        }
-        if (rawPacket.packetID == respawnID) {
-          latestTickdex = i
-          latestRespawnPacketAndOthers.clear()
-
-          // TODO - make sure this works with changing dimensions and like in singleplayer??????
-          // TODO - make sure this works with changing dimensions and like in singleplayer??????
-          // TODO - make sure this works with changing dimensions and like in singleplayer??????
-          if ((rawPacket.cookPacket() as SPacketRespawn).dimensionID != playerDimension) {
             latestRespawnPacketAndOthers.add(packetProcessIndex)
           }
         }
       }
-    }
 
-    // Run that join packet
-    this.ticks[0].serverPackets.firstOrNull()?.cookPacket()?.processPacket(netHandler)
-    val firstTick = this.ticks[latestTickdex]
+      // Run that join packet
+      this.ticks[0].serverPackets.firstOrNull()?.cookPacket()?.processPacket(netHandler)
+      val firstTick = this.ticks[latestTickdex]
 
-    // Replay important packets that bungee like doesn't care about???
-    for (i in 0 until latestTickdex) {
-      val tick = this.ticks[i]
-      tick.serverPackets.filter {
-        it.packetID == teamsID
-          || it.packetID == bossBarID
-          || it.packetID == scoreboardID
-          || it.packetID == playerListID
-        // TODO - add more stuff here if it's crashing lol
-      }.forEach {
-        it.cookPacket().processPacket(netHandler)
+      // Replay important packets that bungee like doesn't care about???
+      for (i in 0 until latestTickdex) {
+        val tick = this.ticks[i]
+        tick.serverPackets.filter {
+          it.packetID == teamsID
+            || it.packetID == bossBarID
+            || it.packetID == scoreboardID
+            || it.packetID == playerListID
+          // TODO - add more stuff here if it's crashing lol
+        }.forEach {
+          it.cookPacket().processPacket(netHandler)
+        }
       }
+
+      // Respawn + extra packets that tick
+      latestRespawnPacketAndOthers.forEach { (i, i2) ->
+        this.ticks[i].serverPackets[i2].cookPacket().processPacket(netHandler)
+      }
+
+      // Client stuff too I guess
+      firstTick.clientEvents.forEach { event ->
+        event.processEvent(ReplayState)
+      }
+
+      this.tickdex = latestTickdex + 1
+
+      // Ok we're good
+      this.playUntil(fastTargetTick)
     }
 
-    // Respawn + extra packets that tick
-    latestRespawnPacketAndOthers.forEach { (i, i2) ->
-      this.ticks[i].serverPackets[i2].cookPacket().processPacket(netHandler)
+    val wasPaused = paused
+    paused = false
+    for (i in 0..20.coerceAtMost(targetTick)) {
+      mc.runTick()
     }
-
-    // Client stuff too I guess
-    firstTick.clientEvents.forEach { event ->
-      event.processEvent(ReplayState)
-    }
-
-    this.tickdex = latestTickdex + 1
-
-    // Ok we're good
-    this.playUntil(targetTick)
-
-    // idk horse
-//    mc.player.dismountRidingEntity()
-//    mc.runTick()
-
-    // but don't ruuuunnn itttt
-    // TODO - rUN MORE TICKS
-    // TODO - rUN MORE TICKS
-    // TODO - rUN MORE TICKS
-    // TODO - rUN MORE TICKS
-    // TODO - rUN MORE TICKS
-    // TODO - rUN MORE TICKS
-    // TODO - rUN MORE TICKS
-    // TODO - rUN MORE TICKS
-    // TODO - rUN MORE TICKS
-    // TODO - rUN MORE TICKS
-    // TODO - rUN MORE TICKS
-    // TODO - rUN MORE TICKS
-    // TODO - rUN MORE TICKS
-    // TODO - rUN MORE TICKS
-    // TODO - rUN MORE TICKS
-    // TODO - rUN MORE TICKS
-    // TODO - rUN MORE TICKS
-    // TODO - rUN MORE TICKS
-    // TODO - rUN MORE TICKS
-    // TODO - rUN MORE TICKS
-    // TODO - rUN MORE TICKS
-    // TODO - rUN MORE TICKS
-    // TODO - rUN MORE TICKS
-    // TODO - rUN MORE TICKS
-    // TODO - rUN MORE TICKS
-//    for (i in 0..20) {
+//    skipping = true
+//    for (i in 0..80) {
 //      mc.runTick()
 //    }
+    skipping = false
+    paused = wasPaused
   }
 
   fun skipForward(ticks: Int) {
     val targetTick = (this.tickdex + ticks).coerceAtMost(this.ticks.size - 1)
 
-    println("SKIPPING!!! TO TARGET TICK: $targetTick")
     if (ticks > 20 * 60) {
       this.skipTo(targetTick)
     } else {

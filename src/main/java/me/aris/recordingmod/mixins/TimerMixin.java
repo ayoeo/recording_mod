@@ -1,6 +1,7 @@
 package me.aris.recordingmod.mixins;
 
 import me.aris.recordingmod.LiteModRecordingModKt;
+import me.aris.recordingmod.Replay;
 import net.minecraft.client.Minecraft;
 import net.minecraft.util.Timer;
 import org.spongepowered.asm.mixin.Mixin;
@@ -16,8 +17,9 @@ abstract class TimerMixin {
 
   @Inject(at = @At("HEAD"), method = "updateTimer", cancellable = true)
   private void messWithTimer(CallbackInfo ci) {
-    if (LiteModRecordingModKt.getActiveReplay() != null) {
-      if (LiteModRecordingModKt.getPaused()) {
+    Replay replay = LiteModRecordingModKt.getActiveReplay();
+    if (replay != null) {
+      if (LiteModRecordingModKt.getPaused() || replay.reachedEnd()) {
         this.lastSyncSysClock = Minecraft.getSystemTime();
         ci.cancel();
       }

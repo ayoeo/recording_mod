@@ -4,8 +4,9 @@ import kotlin.Pair;
 import me.aris.recordingmod.*;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.EntityPlayerSP;
+import net.minecraft.client.gui.GuiIngame;
 import net.minecraft.client.gui.GuiScreen;
-import net.minecraft.client.gui.inventory.GuiContainer;
+import net.minecraft.client.gui.ScaledResolution;
 import org.lwjgl.input.Keyboard;
 import org.lwjgl.input.Mouse;
 import org.lwjgl.opengl.Display;
@@ -14,6 +15,7 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import javax.annotation.Nullable;
 
@@ -32,10 +34,41 @@ abstract class MinecraftMixin {
   @Shadow
   private static int debugFPS;
 
+  @Shadow
+  public GuiIngame ingameGUI;
+
+  @Shadow
+  public int displayWidth;
+
+  @Shadow
+  public static Minecraft getMinecraft() {
+    return null;
+  }
+
+  @Shadow
+  public int displayHeight;
+
+
+  @Inject(at = @At("HEAD"), method = "getSystemTime", cancellable = true)
+  private static void getSystemTime(CallbackInfoReturnable<Long> ci) {
+    if (LiteModRecordingModKt.getActiveReplay() != null) {
+      Long l = ReplayState.INSTANCE.getSystemTime();
+      if (l != null)
+        ci.setReturnValue(l);
+    }
+  }
+
   @Inject(at = @At("HEAD"), method = "runGameLoop", cancellable = true)
   private void preGameLoop(CallbackInfo ci) {
     if (Keyboard.isKeyDown(Keyboard.KEY_M)) {
-      this.resize(15360, 8640);
+//      this.resize(15360, 8640);
+      this.resize(640, 360);
+      ScaledResolution res = new ScaledResolution(getMinecraft());
+      System.out.println("360p: " + res.getScaledWidth() + ", " + res.getScaledHeight());
+    } else if (Keyboard.isKeyDown(Keyboard.KEY_N)) {
+      this.resize(1920, 1080);
+      ScaledResolution res = new ScaledResolution(getMinecraft());
+      System.out.println("1080p: " + res.getScaledWidth() + ", " + res.getScaledHeight());
     }
     if (LiteModRecordingModKt.getActiveReplay() != null) {
       if (LiteModRecordingModKt.preGameLoop())
@@ -47,7 +80,7 @@ abstract class MinecraftMixin {
   @Inject(at = @At("HEAD"), method = "displayGuiScreen")
   private void onGuiClose(@Nullable GuiScreen guiScreenIn, CallbackInfo ci) {
     if (Recorder.INSTANCE.getRecording()) {
-      if (!(currentScreen instanceof GuiContainer) && guiScreenIn == null) {
+      if (guiScreenIn == null) {
         ClientEvent.writeClientEvent(ClientEvent.CloseScreen.INSTANCE);
       }
     }
@@ -66,27 +99,12 @@ abstract class MinecraftMixin {
     if (Recorder.INSTANCE.getRecording() && player != null) {
       ClientEvent.writeClientEvent(new ClientEvent.Look());
 
+      // Save currently held down keys
+      ClientEvent.GuiState.Companion.setKeysDown();
+
       // Save key state if we're in a gui
       if (currentScreen != null) {
         ClientEvent.writeClientEvent(new ClientEvent.SetKeybinds());
-
-        // Gui Recording owwaaah
-        float adjX = (float) Mouse.getX() / (float) Display.getWidth();
-        float adjY = (float) (Display.getHeight() - Mouse.getY()) / (float) Display.getHeight();
-        Recorder.INSTANCE.getCursorPositions().add(
-          new RenderedPosition(
-            1.0f,
-            new MousePosition(adjX, adjY)
-          )
-        );
-
-        ClientEvent.writeClientEvent(new ClientEvent.GuiState());
-        Recorder.INSTANCE.getCursorPositions().add(
-          new RenderedPosition(
-            0.0f,
-            new MousePosition(adjX, adjY)
-          )
-        );
       }
     } else if (LiteModRecordingModKt.getActiveReplay() != null) {
       if (LiteModRecordingModKt.preTick()) {
@@ -101,6 +119,33 @@ abstract class MinecraftMixin {
       if (player != null) {
         ClientEvent.writeClientEvent(new ClientEvent.Absolutes());
       }
+
+      // Gui Recording owwaaah
+      float adjX = (float) Mouse.getX() / (float) this.displayWidth;
+      float adjY = (float) Mouse.getY() / (float) this.displayHeight;
+
+      // Fix centering maybe haha
+      if (currentScreen == null) {
+        adjX = (float) (Display.getWidth() / 2) / (float) this.displayWidth;
+        adjY = (float) (Display.getHeight() / 2) / (float) this.displayHeight;
+      }
+
+//      Recorder.INSTANCE.getCursorPositions().add(
+//        new RenderedPosition(
+//          1.0f,
+//          new MousePosition(adjX, adjY)
+//        )
+//      );
+
+      ClientEvent.writeClientEvent(new ClientEvent.GuiState());
+//      Recorder.INSTANCE.getCursorPositions().add(
+//        new RenderedPosition(
+//          0.0f,
+//          new MousePosition(adjX, adjY)
+//        )
+//      );
+//      }
+
       Recorder.INSTANCE.endTick();
     }
   }
@@ -110,6 +155,12 @@ abstract class MinecraftMixin {
     if (Recorder.INSTANCE.getRecording()) {
       // Save current key state
       ClientEvent.writeClientEvent(new ClientEvent.HeldItem());
+    } else if (LiteModRecordingModKt.getActiveReplay() != null) {
+      ClientEvent.GuiState state = ReplayState.INSTANCE.getNextGuiProcessState();
+      if (state != null) {
+        state.executeEvents();
+        ReplayState.INSTANCE.setNextGuiProcessState(null);
+      }
     }
   }
 

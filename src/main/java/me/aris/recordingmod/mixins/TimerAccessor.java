@@ -8,5 +8,8 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 public interface TimerAccessor {
   @Accessor
   void setTickLength(float length);
+
+  @Accessor
+  float getTickLength();
 }
 

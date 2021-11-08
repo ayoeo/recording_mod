@@ -154,7 +154,7 @@ public class NetHandlerReplayClient extends NetHandlerPlayClient {
     this.client.gameSettings.difficulty = packetIn.getDifficulty();
     this.client.loadWorld(this.world);
     this.client.player.dimension = packetIn.getDimension();
-    this.client.displayGuiScreen(new GuiDownloadTerrain());
+//    this.client.displayGuiScreen(new GuiDownloadTerrain());
     this.client.player.setEntityId(packetIn.getPlayerId());
     this.currentServerMaxPlayers = packetIn.getMaxPlayers();
     this.client.player.setReducedDebug(packetIn.isReducedDebugInfo());
@@ -811,11 +811,10 @@ public class NetHandlerReplayClient extends NetHandlerPlayClient {
       this.doneLoadingTerrain = false;
       Scoreboard scoreboard = this.world.getScoreboard();
       this.world = new WorldClient(this, new WorldSettings(0L, packetIn.getGameType(), false, this.client.world.getWorldInfo().isHardcoreModeEnabled(), packetIn.getWorldType()), packetIn.getDimensionID(), packetIn.getDifficulty(), this.client.profiler);
-      System.out.println("RESPAWN HAHAHA " + this.world);
       this.world.setWorldScoreboard(scoreboard);
       this.client.loadWorld(this.world);
       this.client.player.dimension = packetIn.getDimensionID();
-      this.client.displayGuiScreen(new GuiDownloadTerrain());
+//      this.client.displayGuiScreen(new GuiDownloadTerrain());
     }
 
     this.client.setDimensionAndSpawnPlayer(packetIn.getDimensionID());
@@ -1044,7 +1043,7 @@ public class NetHandlerReplayClient extends NetHandlerPlayClient {
     } else if (i == 4) {
       if (j == 0) {
 //        this.client.player.connection.sendPacket(new CPacketClientStatus(CPacketClientStatus.State.PERFORM_RESPAWN));
-        this.client.displayGuiScreen(new GuiDownloadTerrain());
+//        this.client.displayGuiScreen(new GuiDownloadTerrain());
       } else if (j == 1) {
         this.client.displayGuiScreen(new GuiWinGame(true, () ->
         {

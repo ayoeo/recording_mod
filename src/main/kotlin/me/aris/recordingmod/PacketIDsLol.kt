@@ -81,4 +81,10 @@ object PacketIDsLol {
       EnumPacketDirection.CLIENTBOUND,
       SPacketRespawn()
     )
+  
+  val setslotid =
+    EnumConnectionState.PLAY.getPacketId(
+      EnumPacketDirection.CLIENTBOUND,
+      SPacketSetSlot()
+    )
 }
