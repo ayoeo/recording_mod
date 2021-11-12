@@ -34,6 +34,13 @@ object PacketIDsLol {
 
   val chunkDataID =
     EnumConnectionState.PLAY.getPacketId(EnumPacketDirection.CLIENTBOUND, SPacketChunkData())
+
+  val explosionID =
+    EnumConnectionState.PLAY.getPacketId(
+      EnumPacketDirection.CLIENTBOUND,
+      SPacketExplosion()
+    )
+
   val multiBlockChangeID =
     EnumConnectionState.PLAY.getPacketId(
       EnumPacketDirection.CLIENTBOUND,
@@ -81,7 +88,7 @@ object PacketIDsLol {
       EnumPacketDirection.CLIENTBOUND,
       SPacketRespawn()
     )
-  
+
   val setslotid =
     EnumConnectionState.PLAY.getPacketId(
       EnumPacketDirection.CLIENTBOUND,

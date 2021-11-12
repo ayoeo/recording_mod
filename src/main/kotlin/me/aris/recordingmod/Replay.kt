@@ -7,6 +7,7 @@ import me.aris.recordingmod.PacketIDsLol.bossBarID
 import me.aris.recordingmod.PacketIDsLol.chunkDataID
 import me.aris.recordingmod.PacketIDsLol.chunkUnloadID
 import me.aris.recordingmod.PacketIDsLol.destroyEntityID
+import me.aris.recordingmod.PacketIDsLol.explosionID
 import me.aris.recordingmod.PacketIDsLol.multiBlockChangeID
 import me.aris.recordingmod.PacketIDsLol.playerListID
 import me.aris.recordingmod.PacketIDsLol.respawnID
@@ -19,21 +20,139 @@ import me.aris.recordingmod.PacketIDsLol.spawnPaintingID
 import me.aris.recordingmod.PacketIDsLol.spawnPlayerID
 import me.aris.recordingmod.PacketIDsLol.teamsID
 import me.aris.recordingmod.mixins.GuiContainerCreativeAccessor
-import me.aris.recordingmod.mixins.MinecraftAccessor
 import me.aris.recordingmod.mixins.SPacketMultiBlockChangeAccessor
-import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.ScaledResolution
 import net.minecraft.client.gui.inventory.GuiContainerCreative
 import net.minecraft.network.PacketBuffer
 import net.minecraft.network.play.server.*
-import net.minecraft.util.Util
 import net.minecraft.util.math.MathHelper
-import org.lwjgl.input.Mouse
+import org.lwjgl.input.Keyboard
 import java.io.File
 import java.util.*
+import kotlin.math.hypot
 import kotlin.system.measureNanoTime
 
+data class TimestampedRotation(val yaw: Float, val pitch: Float, val timestamp: Timestamp)
+data class Timestamp(val tickdex: Int, val partialTicks: Float) {
+  operator fun minus(timestamp: Timestamp) =
+    (this.tickdex - timestamp.tickdex).toFloat() + (this.partialTicks - timestamp.partialTicks)
+}
+
 object ReplayState {
+  private fun findNext(replay: Replay, now: Timestamp): TimestampedRotation? {
+    var hahaha: TimestampedRotation? = null
+    if (replay.tickdex >= replay.ticks.size) return null
+
+    val (i, _) = replay.ticks
+      .subList(replay.tickdex, replay.ticks.size - 1)
+      .withIndex()
+      .find { (i, tick) ->
+        tick.clientEvents.any { clientEvent ->
+          val ret = clientEvent is ClientEvent.Look && clientEvent.cameraRotations.any {
+//            println("${it.timestamped(replay.tickdex + i).timestamp}, $now")
+            val timestamped = it.timestamped(replay.tickdex + i)
+            val ret = timestamped.timestamp - now > 0f
+            if (ret) {
+              // hahahaheehah
+              hahaha = timestamped
+            }
+            ret
+          }
+          ret
+        }
+      } ?: return null
+
+    return hahaha
+  }
+
+  fun updateCameraRotations(partialTicks: Float) {
+    val replay = activeReplay!!
+    val tickdex = replay.tickdex
+    val now = Timestamp(tickdex, partialTicks)
+
+    fun distance(x1: Float, y1: Float, x2: Float, y2: Float) = hypot(x1 - x2, y1 - y2)
+
+    val prevDelta = distance(
+      this.nextRotation.yaw,
+      this.nextRotation.pitch,
+      this.prevRotation.yaw,
+      this.prevRotation.pitch
+    )
+    var nextRotationAtTick = findNext(replay, now)
+
+    nextRotationAtTick?.let {
+      val currentDelta = distance(
+        this.nextRotation.yaw,
+        this.nextRotation.pitch,
+        it.yaw,
+        it.pitch
+      )
+
+      val afterNextRotationsAtTick = findNext(replay, it.timestamp)
+      if (afterNextRotationsAtTick != null) {
+        val nextDelta = distance(
+          afterNextRotationsAtTick.yaw,
+          afterNextRotationsAtTick.pitch,
+          it.yaw,
+          it.pitch
+        )
+
+        if (nextDelta > currentDelta && currentDelta < prevDelta * 0.8) {
+//          println("low old delta ($prevDelta) ($currentDelta), skipping")
+          nextRotationAtTick = afterNextRotationsAtTick
+        }
+      }
+    }
+//    println("latest: ${latestRotation?.timestamp}, $now")
+
+    nextRotationAtTick?.let {
+      if (it.timestamp - this.nextRotation.timestamp > 0f && it.timestamp - now > 0f) {
+//        println("cool new next: ${it.timestamp - now}")
+//        this.prevRotation = this.nextRotation
+        this.nextRotation = it
+      }
+    }
+    val (yaw, pitch) = calculateRotation(this.nextRotation, this.prevRotation, now)
+    mc.player?.let {
+      it.prevRotationYaw = yaw
+      it.prevRotationPitch = pitch
+      it.rotationYaw = yaw
+      it.rotationPitch = pitch
+    }
+    this.prevRotation = TimestampedRotation(yaw, pitch, now)
+  }
+
+
+  private fun calculateRotation(
+    next: TimestampedRotation,
+    prev: TimestampedRotation,
+    now: Timestamp
+  ): Pair<Float, Float> {
+    if (prev == next) {
+      return Pair(next.yaw, next.pitch)
+    }
+
+    val timeBetween = next.timestamp - prev.timestamp
+    val whereweat = now - prev.timestamp
+    // TODO - is this right lmao
+    val partialPartialTicks = (now - prev.timestamp) / timeBetween
+    val deltaX = next.yaw - prev.yaw
+    val deltaY = next.pitch - prev.pitch
+
+    return Pair(
+      deltaX * partialPartialTicks + prev.yaw,
+      deltaY * partialPartialTicks + prev.pitch
+    )
+  }
+
+  private var prevRotation = TimestampedRotation(0f, 0f, Timestamp(0, 0f))
+  private var nextRotation = TimestampedRotation(0f, 0f, Timestamp(0, 0f))
+
+  fun resetRotations() {
+    this.prevRotation = TimestampedRotation(0f, 0f, Timestamp(0, 0f))
+    this.nextRotation = TimestampedRotation(0f, 0f, Timestamp(0, 0f))
+  }
+
   var nextKeybindingState = ClientEvent.trackedKeybinds.map {
     Pair(false, 0)
   }
@@ -41,6 +160,15 @@ object ReplayState {
   var nextGuiState: ClientEvent.GuiState? = null
   var nextGuiStateButLikeAfterThisOneGodHelpUsAll: ClientEvent.GuiState? = null
   var currentGuiState: ClientEvent.GuiState? = null
+
+
+  data class CameraRotationsAround(
+    val current: CameraRotationsAtTick?,
+    val next: CameraRotationsAtTick?
+  )
+
+//  var cameraRotations = CameraRotationsAround(null, null)
+
   var nextGuiProcessState: ClientEvent.GuiState? = null
   var scaledRes = Triple(640.0, 360.0, 1)
   var systemTime: Long? = null
@@ -51,6 +179,8 @@ object ReplayState {
   var nextPitch = 0f
   var nextAbsoluteState: ClientEvent.Absolutes? = null
 }
+
+data class CameraRotationsAtTick(val cameraRotations: List<CameraRotation>, val tickdex: Int)
 
 class Replay(replayFile: File) {
   var tickdex = 0
@@ -116,6 +246,16 @@ class Replay(replayFile: File) {
           val packetProcessIndex = Pair(i, i2)
 
           // Block changes
+          if (rawPacket.packetID == explosionID) {
+            val packet = rawPacket.cookPacket() as SPacketExplosion
+            packet.affectedBlockPositions.map {
+              val chunkX = it.x shr 4
+              val chunkZ = it.z shr 4
+              changedBlockChunks.getOrPut(Pair(chunkX, chunkZ)) {
+                mutableListOf()
+              }.add(packetProcessIndex)
+            }
+          }
           if (rawPacket.packetID == multiBlockChangeID) {
             val packet = rawPacket.cookPacket() as SPacketMultiBlockChange
             val chunkPos = (packet as SPacketMultiBlockChangeAccessor).chunkPos
@@ -150,7 +290,8 @@ class Replay(replayFile: File) {
             else -> null
           }
           if (id != null) {
-            spawnedEntities[id] = packetProcessIndex
+            if (Keyboard.isKeyDown(Keyboard.KEY_P))
+              spawnedEntities[id] = packetProcessIndex
           }
 
           // UN AND DE
@@ -163,8 +304,8 @@ class Replay(replayFile: File) {
             packet.entityIDs.forEach { entID ->
               val spawnIndex = spawnedEntities[entID]
               if (spawnIndex != null) {
-                ignoredPacketInfo.add(spawnIndex)
-                ignoredPacketInfo.add(packetProcessIndex)
+                if (Keyboard.isKeyDown(Keyboard.KEY_P))
+                  ignoredPacketInfo.add(spawnIndex)
                 spawnedEntities.remove(entID)
               }
             }
@@ -255,13 +396,6 @@ class Replay(replayFile: File) {
     val replayTime = measureNanoTime {
       for (i in 0 until targetTick - tickdex) {
         if (this.tickdex < this.ticks.size) {
-//          val mc = mc as MinecraftAccessor
-//          synchronized(mc.scheduledTasks)
-//          {
-//            while (!mc.scheduledTasks.isEmpty()) {
-//              Util.runTask(mc.scheduledTasks.poll(), null);
-//            }
-//          }
           this.ticks[this.tickdex].replayFast(i, ignoredPacketInfo)
           this.tickdex++
         }
@@ -274,12 +408,14 @@ class Replay(replayFile: File) {
 
   fun playNextTick() {
     if (this.tickdex < this.ticks.size) {
+//      val mc = mc as MinecraftAccessor
       this.ticks[this.tickdex].replayFull()
       this.tickdex++
     }
   }
 
   fun restart() {
+    ReplayState.resetRotations()
     val scaled = ScaledResolution(mc)
     ReplayState.scaledRes =
       Triple(scaled.scaledWidth_double, scaled.scaledHeight_double, scaled.scaleFactor)
@@ -387,10 +523,18 @@ class Replay(replayFile: File) {
   fun skipForward(ticks: Int) {
     val targetTick = (this.tickdex + ticks).coerceAtMost(this.ticks.size - 1)
 
-    if (ticks > 20 * 60) {
+    if (ticks > 20 * 30) {
       this.skipTo(targetTick)
     } else {
       this.playUntil(targetTick)
+      for (i in 0..ticks) {
+        break
+        if (this.tickdex < this.ticks.size) {
+          this.ticks[this.tickdex].replayFast(i, hashSetOf())
+          this.tickdex++
+        }
+//        mc.runTick()
+      }
     }
     println("SKIPPED!!! TO TARGET TICK: $targetTick")
   }

@@ -24,6 +24,15 @@ data class GuiInputEventWithMoreStuff(
   val partialTicks: Float
 )
 
+data class CameraRotation(
+  val yaw: Float,
+  val pitch: Float,
+  val partialTicks: Float
+) {
+  fun timestamped(tickdex: Int) = TimestampedRotation(yaw, pitch, Timestamp(tickdex, partialTicks))
+
+}
+
 sealed class GuiInputEvent {
   companion object {
     fun readEvent(id: Int, buffer: PacketBuffer) = when (id) {
@@ -205,6 +214,9 @@ object Recorder {
     val scaled = ScaledResolution(mc)
     Triple(scaled.scaledWidth_double, scaled.scaledHeight_double, scaled.scaleFactor)
   }
+
+  // Player look and stuff good good very important
+  val rotations = mutableListOf<CameraRotation>()
 
   @Volatile
   var recording = false

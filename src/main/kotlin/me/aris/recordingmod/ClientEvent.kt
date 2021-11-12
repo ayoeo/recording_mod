@@ -2,7 +2,6 @@ package me.aris.recordingmod
 
 import com.mumfrey.liteloader.gl.GL.*
 import io.netty.buffer.ByteBuf
-import me.aris.recordingmod.PacketIDsLol.setslotid
 import me.aris.recordingmod.PacketIDsLol.spawnMobID
 import me.aris.recordingmod.PacketIDsLol.spawnObjectID
 import me.aris.recordingmod.PacketIDsLol.spawnPlayerID
@@ -170,6 +169,7 @@ sealed class ClientEvent {
           is Absolutes -> -5
           is Look -> -6
           is GuiState -> -7
+          is Resize -> -8
         }
       )
       event.writeToBuffer(buffer)
@@ -184,6 +184,7 @@ sealed class ClientEvent {
       -5 -> Absolutes()
       -6 -> Look()
       -7 -> GuiState()
+      -8 -> Resize
 
       else -> TODO("Idk handle fucked up data or something")
     }
@@ -338,7 +339,10 @@ sealed class ClientEvent {
             }
           }
         }
-
+        
+        if (event is GuiInputEvent.KeyTypedEvent) {
+          println("when the key is typed ${event.typedChar}")
+        }
 
         if (mc.currentScreen != null) event.process()
         ReplayState.systemTime = null
@@ -418,7 +422,7 @@ sealed class ClientEvent {
 
           prevPos = if (i == 0) {
             val prev = ReplayState.currentGuiState?.mousePositions?.asReversed()?.firstOrNull()
-            prev?.copy(partialTicks = prev.partialTicks - 1) ?: prevPos
+            prev?.copy(partialTicks = prev.partialTicks - 1f) ?: prevPos
           } else {
             this.mousePositions[i - 1]
           }
@@ -550,6 +554,9 @@ sealed class ClientEvent {
 
     override fun processEvent(replayState: ReplayState) {
       replayState.nextAbsoluteState = this
+//      if (replayState.scaledRes != this.resolution) {
+//        
+//      }
       replayState.scaledRes = this.resolution
     }
 
@@ -600,19 +607,56 @@ sealed class ClientEvent {
     private var yaw = 0f
     private var pitch = 0f
 
+    // TODO - write + read these :  )))
+    //  and store prev + cur + next look ticks hahaha
+    var cameraRotations = mutableListOf<CameraRotation>()
+
     override fun loadFromBuffer(buffer: PacketBuffer) {
       this.yaw = buffer.readFloat()
       this.pitch = buffer.readFloat()
+
+      val rotationsCount = buffer.readVarInt()
+      for (i in 0 until rotationsCount) {
+        val pos = CameraRotation(
+          buffer.readFloat(),
+          buffer.readFloat(),
+          buffer.readFloat()
+        )
+        this.cameraRotations.add(pos)
+      }
     }
 
     override fun writeToBuffer(buffer: PacketBuffer) {
       buffer.writeFloat(mc.player.rotationYaw)
       buffer.writeFloat(mc.player.rotationPitch)
+
+      buffer.writeVarInt(Recorder.rotations.size)
+      Recorder.rotations.forEach {
+        buffer.writeFloat(it.yaw)
+        buffer.writeFloat(it.pitch)
+        buffer.writeFloat(it.partialTicks)
+      }
+
+      Recorder.rotations.clear()
     }
 
     override fun processEvent(replayState: ReplayState) {
       replayState.nextYaw = this.yaw
       replayState.nextPitch = this.pitch
+
+
+//      activeReplay?.let { replay ->
+//        replayState.cameraRotations = ReplayState.CameraRotationsAround(
+//          null,//CameraRotationsAtTick(this.cameraRotations, activeReplay!!.tickdex),
+//        )
+//      }
+    }
+  }
+
+  object Resize : ClientEvent() {
+    override fun processEvent(replayState: ReplayState) {
+      println("resizing hahahahahhahahahaahhahahhhahahahhahhaahahahhahhahhah")
+      (mc as MinecraftAccessor).invokeResize(mc.displayWidth, mc.displayHeight)
     }
   }
 }

@@ -12,6 +12,9 @@ import java.util.concurrent.FutureTask;
 @Mixin(Minecraft.class)
 public interface MinecraftAccessor {
   @Accessor
+  Queue<FutureTask<?>> getScheduledTasks();
+
+  @Accessor
   Timer getTimer();
 
   @Accessor
@@ -28,4 +31,7 @@ public interface MinecraftAccessor {
 
   @Invoker
   void invokeProcessKeyBinds();
+
+  @Invoker
+  void invokeResize(int w, int h);
 }

@@ -26,7 +26,10 @@ abstract class EntityRendererMixin {
 
   @Inject(at = @At("HEAD"), method = "updateCameraAndRender")
   private void render(float partialTicks, long nanoTime, CallbackInfo ci) {
-    if (Minecraft.getMinecraft().currentScreen == null) return;
+    if (Minecraft.getMinecraft().currentScreen == null && LiteModRecordingModKt.getActiveReplay() != null) {
+      ReplayState.INSTANCE.updateCameraRotations(Minecraft.getMinecraft().getRenderPartialTicks());
+      return;
+    }
 
     if (Recorder.INSTANCE.getRecording()) {
       float adjX = (float) Mouse.getX() / (float) Minecraft.getMinecraft().displayWidth;
@@ -35,7 +38,7 @@ abstract class EntityRendererMixin {
       long deltaTime = Minecraft.getSystemTime() - lastTime;
       if ((previous.component1() == Mouse.getX()
         && previous.component2() == Mouse.getY()
-        && deltaTime < 5) || deltaTime < 2
+        && deltaTime < 5) || deltaTime < 3
       ) {
         // eh
         return;
@@ -61,7 +64,11 @@ abstract class EntityRendererMixin {
       } else {
         // Center it : )
         Mouse.setCursorPosition(Display.getWidth() / 2, Display.getHeight() / 2);
+
+        // HAHAHAHAHAHA LOOKING??
+        // TODO
       }
+
     }
   }
 }

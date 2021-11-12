@@ -58,6 +58,14 @@ abstract class MinecraftMixin {
     }
   }
 
+
+  @Inject(at = @At("HEAD"), method = "resize")
+  private void onResize(CallbackInfo ci) {
+    if (Recorder.INSTANCE.getRecording()) {
+      ClientEvent.writeClientEvent(ClientEvent.Resize.INSTANCE);
+    }
+  }
+
   @Inject(at = @At("HEAD"), method = "runGameLoop", cancellable = true)
   private void preGameLoop(CallbackInfo ci) {
     if (Keyboard.isKeyDown(Keyboard.KEY_M)) {
@@ -147,6 +155,12 @@ abstract class MinecraftMixin {
 //      }
 
       Recorder.INSTANCE.endTick();
+    } else if (LiteModRecordingModKt.getActiveReplay() != null) {
+      ClientEvent.GuiState state = ReplayState.INSTANCE.getNextGuiProcessState();
+      if (state != null) {
+        state.executeEvents();
+        ReplayState.INSTANCE.setNextGuiProcessState(null);
+      }
     }
   }
 
@@ -155,12 +169,6 @@ abstract class MinecraftMixin {
     if (Recorder.INSTANCE.getRecording()) {
       // Save current key state
       ClientEvent.writeClientEvent(new ClientEvent.HeldItem());
-    } else if (LiteModRecordingModKt.getActiveReplay() != null) {
-      ClientEvent.GuiState state = ReplayState.INSTANCE.getNextGuiProcessState();
-      if (state != null) {
-        state.executeEvents();
-        ReplayState.INSTANCE.setNextGuiProcessState(null);
-      }
     }
   }
 

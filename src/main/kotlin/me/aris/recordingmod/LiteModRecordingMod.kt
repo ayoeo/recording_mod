@@ -114,7 +114,7 @@ fun checkKeybinds(): Boolean {
       Keyboard.KEY_D -> {
         // SKIP MOMENT SKIPMENT
         LittleTestPerformanceTrackerThing.resetTimings()
-        activeReplay?.skipForward(20 * 10)
+        activeReplay?.skipForward(20 * 2)
         LittleTestPerformanceTrackerThing.printTimings()
         println("Skipping 10 seconds...")
         return true
@@ -125,7 +125,7 @@ fun checkKeybinds(): Boolean {
         LittleTestPerformanceTrackerThing.resetTimings()
 //        activeReplay?.skipTo(73533)
 //        activeReplay?.skipTo(1017 + 20)
-        activeReplay?.skipTo(585)
+        activeReplay?.skipTo(1786)
 //        activeReplay?.restart()
         LittleTestPerformanceTrackerThing.printTimings()
         println("SKIPPING TO THAT ONE PLACE YOU LIKE")
@@ -150,7 +150,7 @@ fun preGameLoop(): Boolean {
   // MOUSE WILL NOT BE
 
   if (Keyboard.isKeyDown(Keyboard.KEY_K)) {
-    ((mc as MinecraftAccessor).timer as TimerAccessor).tickLength = 1000f / 0.1f
+    ((mc as MinecraftAccessor).timer as TimerAccessor).tickLength = 1000f / 5f
   } else {
     ((mc as MinecraftAccessor).timer as TimerAccessor).tickLength = 1000f / 20f
   }
