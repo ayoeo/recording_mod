@@ -69,8 +69,9 @@ abstract class MinecraftMixin {
   @Inject(at = @At("HEAD"), method = "runGameLoop", cancellable = true)
   private void preGameLoop(CallbackInfo ci) {
     if (Keyboard.isKeyDown(Keyboard.KEY_M)) {
-//      this.resize(15360, 8640);
-      this.resize(640, 360);
+      this.resize(2560, 1440);
+//      this.resize(3840, 2160);
+//      this.resize(640, 360);
       ScaledResolution res = new ScaledResolution(getMinecraft());
       System.out.println("360p: " + res.getScaledWidth() + ", " + res.getScaledHeight());
     } else if (Keyboard.isKeyDown(Keyboard.KEY_N)) {
@@ -81,6 +82,14 @@ abstract class MinecraftMixin {
     if (LiteModRecordingModKt.getActiveReplay() != null) {
       if (LiteModRecordingModKt.preGameLoop())
         ci.cancel();
+    }
+  }
+
+  //  @Inject(at = @At("TAIL"), method = "runGameLoop")
+  @Inject(at = @At(value = "INVOKE", target = "Lnet/minecraft/client/shader/Framebuffer;unbindFramebuffer()V", shift = At.Shift.BEFORE), method = "runGameLoop")
+  private void postGameLoop(CallbackInfo ci) {
+    if (Renderer.INSTANCE.isRendering()) {
+      Renderer.INSTANCE.captureFrame();
     }
   }
 

@@ -76,6 +76,7 @@ fun checkKeybinds(): Boolean {
         LittleTestPerformanceTrackerThing.resetTimings()
         activeReplay?.skipBackwards(20 * 10)
         LittleTestPerformanceTrackerThing.printTimings()
+        Renderer.startRender()
         println("Skipping back 10 seconds...")
         return true
       }
@@ -123,8 +124,6 @@ fun checkKeybinds(): Boolean {
       Keyboard.KEY_O -> {
         // SKIP MOMENT SKIPMENT
         LittleTestPerformanceTrackerThing.resetTimings()
-//        activeReplay?.skipTo(73533)
-//        activeReplay?.skipTo(1017 + 20)
         activeReplay?.skipTo(1786)
 //        activeReplay?.restart()
         LittleTestPerformanceTrackerThing.printTimings()
@@ -147,6 +146,7 @@ fun preGameLoop(): Boolean {
   while (Mouse.next());
   Mouse.getDX()
   Mouse.getDY()
+  // TODO - let mouse back for gui? hahahah
   // MOUSE WILL NOT BE
 
   if (Keyboard.isKeyDown(Keyboard.KEY_K)) {

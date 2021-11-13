@@ -339,10 +339,6 @@ sealed class ClientEvent {
             }
           }
         }
-        
-        if (event is GuiInputEvent.KeyTypedEvent) {
-          println("when the key is typed ${event.typedChar}")
-        }
 
         if (mc.currentScreen != null) event.process()
         ReplayState.systemTime = null

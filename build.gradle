@@ -48,9 +48,18 @@ build.mustRunAfter(clean)
 repositories {
   mavenCentral()
 }
-dependencies {
-  implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
+
+configurations {
+  fat
 }
+
+dependencies {
+  fat "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
+  fat "io.humble:humble-video-noarch:0.3.0"
+  compile "io.humble:humble-video-all:0.3.0"
+  configurations.implementation.extendsFrom(configurations.fat)
+}
+
 compileKotlin {
   kotlinOptions {
     jvmTarget = "1.8"
@@ -73,7 +82,6 @@ litemod {
     description = "even better than obs"
     mixinConfigs += "mixins.recordingmod.json"
   }
-
 }
 
 sourceSets {
@@ -85,6 +93,11 @@ sourceSets {
 
 jar {
   from litemod.outputs
-  from { configurations.compileClasspath.filter { it.name.contains("kotlin") }.collect { it.isDirectory() ? it : zipTree(it) } }
+  from {
+    configurations.fat.collect {
+      it.isDirectory() ? it : zipTree(it)
+    }
+  }
+  exclude 'META-INF/*.RSA', 'META-INF/*.SF', 'META-INF/*.DSA'
 }
 
