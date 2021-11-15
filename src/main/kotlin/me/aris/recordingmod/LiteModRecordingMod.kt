@@ -69,6 +69,8 @@ fun checkKeybinds(): Boolean {
     when (key) {
       Keyboard.KEY_SPACE -> {
         paused = !paused
+
+        Renderer.finishRender()
       }
 
       Keyboard.KEY_A -> {
@@ -76,7 +78,6 @@ fun checkKeybinds(): Boolean {
         LittleTestPerformanceTrackerThing.resetTimings()
         activeReplay?.skipBackwards(20 * 10)
         LittleTestPerformanceTrackerThing.printTimings()
-        Renderer.startRender()
         println("Skipping back 10 seconds...")
         return true
       }
@@ -88,6 +89,18 @@ fun checkKeybinds(): Boolean {
         LittleTestPerformanceTrackerThing.printTimings()
         println("Skipping back 30 seconds...")
         return true
+      }
+
+      Keyboard.KEY_R -> {
+        Renderer.startRender()
+      }
+
+      Keyboard.KEY_S -> {
+        Renderer.startTick = activeReplay?.tickdex ?: 0
+      }
+
+      Keyboard.KEY_E -> {
+        Renderer.endTick = activeReplay?.tickdex ?: 0
       }
 
       Keyboard.KEY_F -> {
@@ -124,7 +137,7 @@ fun checkKeybinds(): Boolean {
       Keyboard.KEY_O -> {
         // SKIP MOMENT SKIPMENT
         LittleTestPerformanceTrackerThing.resetTimings()
-        activeReplay?.skipTo(1786)
+        activeReplay?.skipTo(490) // 162
 //        activeReplay?.restart()
         LittleTestPerformanceTrackerThing.printTimings()
         println("SKIPPING TO THAT ONE PLACE YOU LIKE")

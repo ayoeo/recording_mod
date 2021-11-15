@@ -55,8 +55,6 @@ configurations {
 
 dependencies {
   fat "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
-  fat "io.humble:humble-video-noarch:0.3.0"
-  compile "io.humble:humble-video-all:0.3.0"
   configurations.implementation.extendsFrom(configurations.fat)
 }
 

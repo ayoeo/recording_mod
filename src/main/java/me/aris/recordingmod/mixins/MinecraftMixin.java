@@ -7,6 +7,7 @@ import net.minecraft.client.entity.EntityPlayerSP;
 import net.minecraft.client.gui.GuiIngame;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.gui.ScaledResolution;
+import net.minecraft.client.settings.GameSettings;
 import org.lwjgl.input.Keyboard;
 import org.lwjgl.input.Mouse;
 import org.lwjgl.opengl.Display;
@@ -49,6 +50,9 @@ abstract class MinecraftMixin {
   public int displayHeight;
 
 
+  @Shadow
+  public GameSettings gameSettings;
+
   @Inject(at = @At("HEAD"), method = "getSystemTime", cancellable = true)
   private static void getSystemTime(CallbackInfoReturnable<Long> ci) {
     if (LiteModRecordingModKt.getActiveReplay() != null) {
@@ -69,8 +73,8 @@ abstract class MinecraftMixin {
   @Inject(at = @At("HEAD"), method = "runGameLoop", cancellable = true)
   private void preGameLoop(CallbackInfo ci) {
     if (Keyboard.isKeyDown(Keyboard.KEY_M)) {
-      this.resize(2560, 1440);
-//      this.resize(3840, 2160);
+//      this.resize(2560, 1440);
+      this.resize(3840, 2160);
 //      this.resize(640, 360);
       ScaledResolution res = new ScaledResolution(getMinecraft());
       System.out.println("360p: " + res.getScaledWidth() + ", " + res.getScaledHeight());
@@ -86,7 +90,7 @@ abstract class MinecraftMixin {
   }
 
   //  @Inject(at = @At("TAIL"), method = "runGameLoop")
-  @Inject(at = @At(value = "INVOKE", target = "Lnet/minecraft/client/shader/Framebuffer;unbindFramebuffer()V", shift = At.Shift.BEFORE), method = "runGameLoop")
+  @Inject(at = @At(value = "INVOKE", target = "Lnet/minecraft/client/Minecraft;updateDisplay()V", shift = At.Shift.BEFORE), method = "runGameLoop")
   private void postGameLoop(CallbackInfo ci) {
     if (Renderer.INSTANCE.isRendering()) {
       Renderer.INSTANCE.captureFrame();
@@ -193,6 +197,12 @@ abstract class MinecraftMixin {
         ((KeyBindingAccessor) ClientEvent.Companion.getTrackedKeybinds()[i]).setPressed(pair.getFirst());
         ((KeyBindingAccessor) ClientEvent.Companion.getTrackedKeybinds()[i]).setPressTime(pair.getSecond());
       }
+//        if (){
+//      if (gameSettings.keyBindAttack.isKeyDown()) {
+//        System.out.println("ooh weird this can't be good: " + LiteModRecordingModKt.getActiveReplay().getTickdex());
+//        System.out.println("yawpitch :" + player.rotationYaw + ", " + player.rotationPitch);
+//        ((KeyBindingAccessor) gameSettings.keyBindAttack).setPressed(false);
+//      }
 
       if (Minecraft.getMinecraft().player != null) {
         Minecraft.getMinecraft().player.inventory.currentItem = ReplayState.INSTANCE.getNextHeldItem();

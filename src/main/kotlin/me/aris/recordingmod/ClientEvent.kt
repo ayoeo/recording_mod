@@ -102,6 +102,12 @@ class ReplayTick(
         }
       }
 
+    // haha forgot this haha
+    mc.player?.rotationYaw = ReplayState.nextYaw
+    mc.player?.rotationPitch = ReplayState.nextPitch
+
+    mc.entityRenderer.getMouseOver(1.0F)
+
     // Keybindment
     val mc = mc as MinecraftAccessor
     if (mc.leftClickCounter > 0) {
@@ -482,7 +488,7 @@ sealed class ClientEvent {
   class Absolutes : ClientEvent() {
     private var resolution = Triple(0.0, 0.0, 1)
 
-    private var systemTime = 0L
+    var systemTime = 0L
     private var creativeFlying = false
     private var thirdPersonView = 0
     private var sprintTicksLeft = 0
@@ -558,7 +564,7 @@ sealed class ClientEvent {
 
     fun runitbaby(isFastReplay: Boolean) {
       if (mc.player == null) return
-//      ReplayState.systemTime = this.systemTime
+      ReplayState.lastSystemTime = this.systemTime
 
       val riding = if (this.ridingID == -1) null else mc.world?.getEntityByID(this.ridingID)
 

@@ -172,6 +172,7 @@ object ReplayState {
   var nextGuiProcessState: ClientEvent.GuiState? = null
   var scaledRes = Triple(640.0, 360.0, 1)
   var systemTime: Long? = null
+  var lastSystemTime = 0L
 
   var nextHeldItem = 0
 
@@ -433,7 +434,7 @@ class Replay(replayFile: File) {
     ReplayState.nextAbsoluteState = null
 
     mc.ingameGUI.chatGUI.clearChatMessages(true)
-    mc.gameSettings.showDebugInfo = true
+//    mc.gameSettings.showDebugInfo = true
     mc.loadWorld(null)
     this.netHandler = NetHandlerReplayClient(
       mc,
@@ -527,14 +528,6 @@ class Replay(replayFile: File) {
       this.skipTo(targetTick)
     } else {
       this.playUntil(targetTick)
-      for (i in 0..ticks) {
-        break
-        if (this.tickdex < this.ticks.size) {
-          this.ticks[this.tickdex].replayFast(i, hashSetOf())
-          this.tickdex++
-        }
-//        mc.runTick()
-      }
     }
     println("SKIPPED!!! TO TARGET TICK: $targetTick")
   }
