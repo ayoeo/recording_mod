@@ -1,0 +1,60 @@
+#version 430
+
+layout(local_size_x = 32, local_size_y = 32) in;
+
+layout(binding = 0, rgba8) uniform readonly image2D input_image;
+
+layout(binding = 1) writeonly buffer Y { uint y_ch[]; };
+
+layout(binding = 2) writeonly buffer U { uint u_ch[]; };
+
+layout(binding = 3) writeonly buffer V { uint v_ch[]; };
+
+vec3 color_at(uint x, uint y) {
+  return imageLoad(input_image, ivec2(x, y)).rgb;
+}
+
+ivec3 yuv_from_rgb(vec3 rgb) {
+  uint r = uint(rgb.r * 255.0);
+  uint g = uint(rgb.g * 255.0);
+  uint b = uint(rgb.b * 255.0);
+  uint y = ((66 * r + 129 * g + 25 * b + 128) >> 8) + 16;
+  uint u = ((-38 * r - 74 * g + 112 * b + 128) >> 8) + 128;
+  uint v = ((112 * r - 94 * g - 18 * b + 128) >> 8) + 128;
+  return ivec3(y, u, v);
+}
+
+uint pack_4(ivec4 bytes) {
+  return bytes.x | (bytes.y << 8) | (bytes.z << 16) | (bytes.w << 24);
+}
+
+void main() {
+  ivec2 size = imageSize(input_image);
+  uint width = size.x / 4;
+
+  uint x = gl_GlobalInvocationID.x;
+  uint y = gl_GlobalInvocationID.y;
+
+  if (x >= width || y >= size.y) {
+    return;
+  }
+
+  uint inv_y = size.y - y;
+
+  // TODO - if you change this to x + 0, x + 1, etc.
+  // it like looks ok?, all the width is there... but how
+  // it only gets 1/4 when you include it?
+  uint xx = x * 4;
+  ivec3 p0 = yuv_from_rgb(color_at(xx + 0, inv_y));
+  ivec3 p1 = yuv_from_rgb(color_at(xx + 1, inv_y));
+  ivec3 p2 = yuv_from_rgb(color_at(xx + 2, inv_y));
+  ivec3 p3 = yuv_from_rgb(color_at(xx + 3, inv_y));
+
+  y_ch[x + y * width] = pack_4(ivec4(p0.x, p1.x, p2.x, p3.x));
+  u_ch[x + y * width] = pack_4(ivec4(p0.y, p1.y, p2.y, p3.y));
+  v_ch[x + y * width] = pack_4(ivec4(p0.z, p1.z, p2.z, p3.z));
+
+  // y_ch[x + y * width] = pack_4(ivec4(0xFF));
+  // u_ch[x + y * width] = pack_4(ivec4(0xFF));
+  // v_ch[x + y * width] = pack_4(ivec4(0xFF));
+}

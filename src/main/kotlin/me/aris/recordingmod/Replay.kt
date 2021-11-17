@@ -434,7 +434,7 @@ class Replay(replayFile: File) {
     ReplayState.nextAbsoluteState = null
 
     mc.ingameGUI.chatGUI.clearChatMessages(true)
-//    mc.gameSettings.showDebugInfo = true
+    mc.gameSettings.showDebugInfo = true
     mc.loadWorld(null)
     this.netHandler = NetHandlerReplayClient(
       mc,
