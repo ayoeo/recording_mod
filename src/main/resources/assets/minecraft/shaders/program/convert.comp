@@ -15,12 +15,12 @@ vec3 color_at(uint x, uint y) {
 }
 
 ivec3 yuv_from_rgb(vec3 rgb) {
-  uint r = uint(rgb.r * 255.0);
-  uint g = uint(rgb.g * 255.0);
-  uint b = uint(rgb.b * 255.0);
-  uint y = ((66 * r + 129 * g + 25 * b + 128) >> 8) + 16;
-  uint u = ((-38 * r - 74 * g + 112 * b + 128) >> 8) + 128;
-  uint v = ((112 * r - 94 * g - 18 * b + 128) >> 8) + 128;
+  float r = rgb.r * 255;
+  float g = rgb.g * 255;
+  float b = rgb.b * 255;
+  float y = 0.299 * r + 0.587 * g + 0.114 * b;
+  float u = -0.169 * r - 0.331 * g + 0.500 * b + 128;
+  float v = 0.500 * r - 0.419 * g - 0.081 * b + 128;
   return ivec3(y, u, v);
 }
 
@@ -41,20 +41,12 @@ void main() {
 
   uint inv_y = size.y - y;
 
-  // TODO - if you change this to x + 0, x + 1, etc.
-  // it like looks ok?, all the width is there... but how
-  // it only gets 1/4 when you include it?
-  uint xx = x * 4;
-  ivec3 p0 = yuv_from_rgb(color_at(xx + 0, inv_y));
-  ivec3 p1 = yuv_from_rgb(color_at(xx + 1, inv_y));
-  ivec3 p2 = yuv_from_rgb(color_at(xx + 2, inv_y));
-  ivec3 p3 = yuv_from_rgb(color_at(xx + 3, inv_y));
+  ivec3 p0 = yuv_from_rgb(color_at(x * 4 + 0, inv_y));
+  ivec3 p1 = yuv_from_rgb(color_at(x * 4 + 1, inv_y));
+  ivec3 p2 = yuv_from_rgb(color_at(x * 4 + 2, inv_y));
+  ivec3 p3 = yuv_from_rgb(color_at(x * 4 + 3, inv_y));
 
   y_ch[x + y * width] = pack_4(ivec4(p0.x, p1.x, p2.x, p3.x));
   u_ch[x + y * width] = pack_4(ivec4(p0.y, p1.y, p2.y, p3.y));
   v_ch[x + y * width] = pack_4(ivec4(p0.z, p1.z, p2.z, p3.z));
-
-  // y_ch[x + y * width] = pack_4(ivec4(0xFF));
-  // u_ch[x + y * width] = pack_4(ivec4(0xFF));
-  // v_ch[x + y * width] = pack_4(ivec4(0xFF));
 }

@@ -75,11 +75,12 @@ abstract class MinecraftMixin {
     if (Keyboard.isKeyDown(Keyboard.KEY_M)) {
 //      this.resize(2560, 1440);
       this.resize(3840, 2160);
+//      this.resize(7680, 4320);
 //      this.resize(640, 360);
       ScaledResolution res = new ScaledResolution(getMinecraft());
       System.out.println("360p: " + res.getScaledWidth() + ", " + res.getScaledHeight());
     } else if (Keyboard.isKeyDown(Keyboard.KEY_N)) {
-      this.resize(1920, 1080);
+      this.resize(640, 360);
       ScaledResolution res = new ScaledResolution(getMinecraft());
       System.out.println("1080p: " + res.getScaledWidth() + ", " + res.getScaledHeight());
     }
@@ -89,14 +90,12 @@ abstract class MinecraftMixin {
     }
   }
 
-  //  @Inject(at = @At("TAIL"), method = "runGameLoop")
-  @Inject(at = @At(value = "INVOKE", target = "Lnet/minecraft/client/Minecraft;updateDisplay()V", shift = At.Shift.BEFORE), method = "runGameLoop")
-  private void postGameLoop(CallbackInfo ci) {
+  @Inject(at = @At(value = "INVOKE", target = "Lnet/minecraft/client/Minecraft;updateDisplay()V", shift = At.Shift.AFTER), method = "runGameLoop")
+  private void postSwapBuffers(CallbackInfo ci) {
     if (Renderer.INSTANCE.isRendering()) {
       Renderer.INSTANCE.captureFrame();
     }
   }
-
 
   @Inject(at = @At("HEAD"), method = "displayGuiScreen")
   private void onGuiClose(@Nullable GuiScreen guiScreenIn, CallbackInfo ci) {

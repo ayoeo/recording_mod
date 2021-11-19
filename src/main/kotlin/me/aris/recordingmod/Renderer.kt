@@ -1,98 +1,138 @@
 package me.aris.recordingmod
 
 import com.mumfrey.liteloader.gl.GL
-import io.netty.buffer.ByteBuf
 import net.minecraft.client.renderer.GlStateManager
 import net.minecraft.client.renderer.OpenGlHelper
-import net.minecraft.client.renderer.texture.TextureUtil
-import net.minecraft.client.resources.IResource
-import net.minecraft.client.shader.ShaderLoader
 import net.minecraft.client.util.JsonException
 import net.minecraft.util.ResourceLocation
 import org.apache.commons.io.IOUtils
 import org.apache.commons.lang3.StringUtils
 import org.lwjgl.BufferUtils
 import org.lwjgl.opengl.*
-import sun.misc.Unsafe
 import sun.nio.ch.DirectBuffer
 import java.io.BufferedInputStream
 import java.io.File
 import java.nio.ByteBuffer
-import java.nio.IntBuffer
 import kotlin.math.ceil
 import kotlin.system.measureNanoTime
 
-private const val PIXEL_FORMAT = "yuv444p"
-private const val CODEC = "libx264"
+external fun startEncode(
+  file: String,
+  width: Int,
+  height: Int,
+  fps: Int,
+  yA: Long,
+  uA: Long,
+  vA: Long,
+  yB: Long,
+  uB: Long,
+  vB: Long
+)
 
-fun createBuffer(size: Long): Pair<ByteBuffer, Int> {
-  val bufferId = OpenGlHelper.glGenBuffers()
-  OpenGlHelper.glBindBuffer(GL43.GL_SHADER_STORAGE_BUFFER, bufferId)
-  GL44.glBufferStorage(
-    GL43.GL_SHADER_STORAGE_BUFFER,
-    size,
-    GL30.GL_MAP_READ_BIT or GL44.GL_MAP_PERSISTENT_BIT or GL44.GL_MAP_COHERENT_BIT
-  )
+external fun sendFrame(useBufferB: Boolean)
+external fun finishEncode()
 
-  return Pair(
-    GL30.glMapBufferRange(
+class MappedBuffer(private val bufferSize: Long) {
+  private val name = OpenGlHelper.glGenBuffers()
+  val data: ByteBuffer
+
+  init {
+    OpenGlHelper.glBindBuffer(GL43.GL_SHADER_STORAGE_BUFFER, this.name)
+    GL44.glBufferStorage(
+      GL43.GL_SHADER_STORAGE_BUFFER,
+      bufferSize,
+      GL30.GL_MAP_READ_BIT or GL44.GL_MAP_PERSISTENT_BIT or GL44.GL_MAP_COHERENT_BIT
+    )
+
+    this.data = GL30.glMapBufferRange(
       GL43.GL_SHADER_STORAGE_BUFFER,
       0,
-      size,
+      bufferSize,
       GL30.GL_MAP_READ_BIT,
       null
-    ),
-    bufferId
-  )
+    )
+  }
+
+  fun bindBufferBase(index: Int) {
+    GL30.glBindBufferBase(GL43.GL_SHADER_STORAGE_BUFFER, index, this.name)
+  }
+
+  fun delete() {
+    OpenGlHelper.glDeleteBuffers(name)
+  }
 }
 
-class RendererState(file: String, val fps: Int) {
-  var pipeThread: Thread? = null
-  var ffmpegInput = run {
-    val pb = ProcessBuilder(
-      "ffmpeg", // TODO - .exe?
-//      "/usr/local/bin/ffmpeg", // TODO - this for mac haha (set path)
-      "-nostdin",
-      "-r",
-      "$fps",
-      "-f",
-      "rawvideo",
-      "-pixel_format",
-//      "0bgr",
-      "yuv444p",
-      "-s",
-      "${mc.displayWidth}x${mc.displayHeight}",
-//      "500x500",
-      "-i",
-      "pipe:0",
-      "-r",
-      "$fps",
-      "-pix_fmt",
-      PIXEL_FORMAT,
-      "-y",
-      "-c:v",
-      CODEC,
-      "-preset:v",
-      "ultrafast",
-      "-rc:v",
-      "vbr",
-      "-b:v",
-      "0",
-      "-crf:v",
-      "13",
-      "-profile:v",
-      "high444",
-      "-vsync",
-      "2",
-      file
-    )
-    pb.redirectError(File("help.txt"))
-    val proc = pb.start()
-    proc.outputStream
+class DoubleBufferedChannels(size: Long) {
+  private val yChannelA = MappedBuffer(size)
+  private val uChannelA = MappedBuffer(size)
+  private val vChannelA = MappedBuffer(size)
+
+  private val yChannelB = MappedBuffer(size)
+  private val uChannelB = MappedBuffer(size)
+  private val vChannelB = MappedBuffer(size)
+
+  var useBufferB = false
+
+  private var fence: GLSync? = null
+
+  fun yuvPointers() = longArrayOf(
+    (this.yChannelA.data as DirectBuffer).address(),
+    (this.uChannelA.data as DirectBuffer).address(),
+    (this.vChannelA.data as DirectBuffer).address(),
+    (this.yChannelB.data as DirectBuffer).address(),
+    (this.uChannelB.data as DirectBuffer).address(),
+    (this.vChannelB.data as DirectBuffer).address()
+  )
+
+  fun swap() {
+    this.useBufferB = !this.useBufferB
   }
+
+  // Returns true if there's data prepared in this buffer
+  // There won't be for the first frame drawn, so it returns false and we drop it who cares : )
+  fun waitForFence(): Boolean {
+    this.fence?.let { fence ->
+      GL32.glClientWaitSync(fence, 0, Long.MAX_VALUE)
+      GL32.glDeleteSync(fence)
+      return true
+    }
+
+    return false
+  }
+
+  // run right after compute dispatch
+  fun makeFence() {
+    this.fence = GL32.glFenceSync(GL32.GL_SYNC_GPU_COMMANDS_COMPLETE, 0)
+  }
+
+  fun delete() {
+    this.yChannelA.delete()
+    this.uChannelA.delete()
+    this.vChannelA.delete()
+
+    this.yChannelB.delete()
+    this.uChannelB.delete()
+    this.vChannelB.delete()
+    this.fence?.let { GL32.glDeleteSync(it) }
+  }
+
+  fun bindBuffers() {
+    if (!this.useBufferB) {
+      this.yChannelA.bindBufferBase(1)
+      this.uChannelA.bindBufferBase(2)
+      this.vChannelA.bindBufferBase(3)
+    } else {
+      this.yChannelB.bindBufferBase(1)
+      this.uChannelB.bindBufferBase(2)
+      this.vChannelB.bindBufferBase(3)
+    }
+  }
+}
+
+class RendererState(val file: String, val fps: Int) {
+  var pipeThread: Thread? = null
   var partialFrames = 0
   var frameIndex = 0
-  var initialSystemTime = ReplayState.lastSystemTime
 
   fun checkFinished() {
     val framesPerTick = fps / 20.0
@@ -102,12 +142,8 @@ class RendererState(file: String, val fps: Int) {
     }
   }
 
-  val bufferSize = (mc.displayWidth * mc.displayHeight).toLong()
-  val littleByteBufferOfBytesToHoldItBecauseImStuckOnTheJvmAndCantGetOut =
-    ByteArray(bufferSize.toInt())
-  val yChannel = createBuffer(bufferSize)
-  val uChannel = createBuffer(bufferSize)
-  val vChannel = createBuffer(bufferSize)
+  private val bufferSize = (mc.displayWidth * mc.displayHeight).toLong()
+  val yuvBuffers = DoubleBufferedChannels(bufferSize)
 }
 
 fun loadComputeShader(file: String): Int {
@@ -145,6 +181,11 @@ val convertProgram = run {
 }
 
 object Renderer {
+  init {
+    val dll = File("librecording_mod_native.so")
+    System.load(dll.absolutePath)
+  }
+
   // TODO - set these with keybinds
   var startTick = 0
   var endTick = 0
@@ -153,15 +194,27 @@ object Renderer {
     get() = this.rendererState != null
 
   private var rendererState: RendererState? = null
-  private val unsafe = run {
-    val f = Unsafe::class.java.getDeclaredField("theUnsafe")
-    f.isAccessible = true
-    f.get(null) as Unsafe
-  }
+
 
   fun startRender() {
+    println("start: $startTick")
     // TODO - pass in more options determined by config (codec, frame size)
-    this.rendererState = RendererState("filement_woah.mp4", 1200)
+    val state = RendererState("filement_woah.mp4", 1200)
+    this.rendererState = state
+
+    val pointers = state.yuvBuffers.yuvPointers()
+    startEncode(
+      state.file,
+      mc.displayWidth,
+      mc.displayHeight,
+      state.fps,
+      pointers[0],
+      pointers[1],
+      pointers[2],
+      pointers[3],
+      pointers[4],
+      pointers[5]
+    )
 
     activeReplay?.skipTo(this.startTick)
   }
@@ -171,13 +224,17 @@ object Renderer {
     println("$name: ${time / 1000000f}")
   }
 
-
   fun captureFrame() {
     val state = this.rendererState!!
 
     // this has to join before we start changing stuff?? hahahahah
     state.pipeThread?.join()
 
+    // We need to know that our previous buffer is ready to go
+    val shouldWrite = state.yuvBuffers.waitForFence()
+    state.yuvBuffers.swap()
+
+    //-------------------Compute shader stuff-------------------//
     // /ahaha
     OpenGlHelper.glUseProgram(convertProgram)
 
@@ -195,71 +252,36 @@ object Renderer {
     OpenGlHelper.glUniform1i(0, 0)
 
     // Set YUV uniforms so we can get data : o
-    GL30.glBindBufferBase(GL43.GL_SHADER_STORAGE_BUFFER, 1, state.yChannel.second)
-    GL30.glBindBufferBase(GL43.GL_SHADER_STORAGE_BUFFER, 2, state.uChannel.second)
-    GL30.glBindBufferBase(GL43.GL_SHADER_STORAGE_BUFFER, 3, state.vChannel.second)
+    state.yuvBuffers.bindBuffers()
 
     GL43.glDispatchCompute(
       ceil(mc.displayWidth / 4.0 / 32.0).toInt(),
       ceil(mc.displayHeight / 32.0).toInt(),
       1
     )
-
-    // TODO - USE THE OTHER THING NOT GLFINISH IT'S LIKE IT BUT FASTER IDK
-    // TODO - USE THE OTHER THING NOT GLFINISH IT'S LIKE IT BUT FASTER IDK
-    // TODO - USE THE OTHER THING NOT GLFINISH IT'S LIKE IT BUT FASTER IDK
-    // TODO - USE THE OTHER THING NOT GLFINISH IT'S LIKE IT BUT FASTER IDK
-    // TODO - USE THE OTHER THING NOT GLFINISH IT'S LIKE IT BUT FASTER IDK
-    // TODO - USE THE OTHER THING NOT GLFINISH IT'S LIKE IT BUT FASTER IDK
-    // TODO - USE THE OTHER THING NOT GLFINISH IT'S LIKE IT BUT FASTER IDK
-    // TODO - USE THE OTHER THING NOT GLFINISH IT'S LIKE IT BUT FASTER IDK
-    // TODO - USE THE OTHER THING NOT GLFINISH IT'S LIKE IT BUT FASTER IDK
-    // TODO - USE THE OTHER THING NOT GLFINISH IT'S LIKE IT BUT FASTER IDK
-    // TODO - USE THE OTHER THING NOT GLFINISH IT'S LIKE IT BUT FASTER IDK
-    // TODO - USE THE OTHER THING NOT GLFINISH IT'S LIKE IT BUT FASTER IDK
-    GL11.glFinish()
-    // or this is fine we're finishing anyway hahahaha (end of frame)
-    // TODO -see how fast it is compared to normal mc if we just do this and don't
-    //   send the data to other stuff to ffmpeg at all ??? : ) )
+    state.yuvBuffers.makeFence()
+    //-------------------Compute shader stuff-------------------//
 
     // TODO - prevent resizing really tho hhahahahahaheheah
     // TODO - prevent resizing really tho hhahahahahaheheah
     // TODO - prevent resizing really tho hhahahahahaheheah
 
+    // TODO - stop buffer a from being written somehow
     state.pipeThread = Thread {
-      val output = state.ffmpegInput
-      // TODO - this should directly copy memory to the rust pointer
-      unsafe.copyMemory(
-        null,
-        (state.yChannel.first as DirectBuffer).address(),
-        state.littleByteBufferOfBytesToHoldItBecauseImStuckOnTheJvmAndCantGetOut,
-        unsafe.arrayBaseOffset(ByteArray::class.java).toLong(),
-        state.bufferSize
-      )
-      output.write(state.littleByteBufferOfBytesToHoldItBecauseImStuckOnTheJvmAndCantGetOut)
+      // TODO
+      //  startRender() -> set frame data to generated/mapped opengl buffers
+      //  each frame in this thread -> call send_frame() and receive_packet()
+      //  when those calls are done, the thread can join because we encoded a frame : o
 
-      unsafe.copyMemory(
-        null,
-        (state.uChannel.first as DirectBuffer).address(),
-        state.littleByteBufferOfBytesToHoldItBecauseImStuckOnTheJvmAndCantGetOut,
-        unsafe.arrayBaseOffset(ByteArray::class.java).toLong(),
-        state.bufferSize
-      )
-      output.write(state.littleByteBufferOfBytesToHoldItBecauseImStuckOnTheJvmAndCantGetOut)
-
-      unsafe.copyMemory(
-        null,
-        (state.vChannel.first as DirectBuffer).address(),
-        state.littleByteBufferOfBytesToHoldItBecauseImStuckOnTheJvmAndCantGetOut,
-        unsafe.arrayBaseOffset(ByteArray::class.java).toLong(),
-        state.bufferSize
-      )
-      output.write(state.littleByteBufferOfBytesToHoldItBecauseImStuckOnTheJvmAndCantGetOut)
-      output.flush()
+      printTimings("encode") {
+        sendFrame(!state.yuvBuffers.useBufferB) // write from the buffer not in use (inverted)
+      }
     }
-    state.pipeThread!!.start()
-//    println("Encode: ${encode / 1000000f}")
 
+    // We don't have data for the first frame, so... drop it hahahahhahahahhahhaha
+    if (shouldWrite) {
+      rendererState?.pipeThread?.start()
+    }
     state.frameIndex++
     state.partialFrames++
     state.checkFinished()
@@ -268,12 +290,12 @@ object Renderer {
   internal fun finishRender() {
     this.rendererState?.let { state ->
       state.pipeThread?.join()
-      state.ffmpegInput.close()
+
+      finishEncode()
 
       // Unmap / delete buffers
-      OpenGlHelper.glDeleteBuffers(state.yChannel.second)
-      OpenGlHelper.glDeleteBuffers(state.uChannel.second)
-      OpenGlHelper.glDeleteBuffers(state.vChannel.second)
+      // TODO - we need to finish writing the buffers here and stuff hahahahahaha (or just don't idc)
+      state.yuvBuffers.delete()
     }
     ReplayState.systemTime = null
 
