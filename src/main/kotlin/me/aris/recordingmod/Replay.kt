@@ -8,6 +8,7 @@ import me.aris.recordingmod.PacketIDsLol.chunkDataID
 import me.aris.recordingmod.PacketIDsLol.chunkUnloadID
 import me.aris.recordingmod.PacketIDsLol.destroyEntityID
 import me.aris.recordingmod.PacketIDsLol.explosionID
+import me.aris.recordingmod.PacketIDsLol.joinGameID
 import me.aris.recordingmod.PacketIDsLol.multiBlockChangeID
 import me.aris.recordingmod.PacketIDsLol.playerListID
 import me.aris.recordingmod.PacketIDsLol.respawnID
@@ -23,6 +24,7 @@ import me.aris.recordingmod.mixins.GuiContainerCreativeAccessor
 import me.aris.recordingmod.mixins.SPacketMultiBlockChangeAccessor
 import net.minecraft.client.gui.ScaledResolution
 import net.minecraft.client.gui.inventory.GuiContainerCreative
+import net.minecraft.network.Packet
 import net.minecraft.network.PacketBuffer
 import net.minecraft.network.play.server.*
 import net.minecraft.util.math.MathHelper
@@ -305,8 +307,9 @@ class Replay(replayFile: File) {
             packet.entityIDs.forEach { entID ->
               val spawnIndex = spawnedEntities[entID]
               if (spawnIndex != null) {
-                if (Keyboard.isKeyDown(Keyboard.KEY_P))
-                  ignoredPacketInfo.add(spawnIndex)
+//                if (Keyboard.isKeyDown(Keyboard.KEY_P)) {
+                ignoredPacketInfo.add(spawnIndex)
+//                }
                 spawnedEntities.remove(entID)
               }
             }
@@ -318,7 +321,8 @@ class Replay(replayFile: File) {
             val chunkCoords = Pair(packet.x, packet.z)
             val loadIndex = loadedChunks[chunkCoords]
             if (loadIndex != null) {
-              ignoredPacketInfo.add(loadIndex)
+//              ignoredPacketInfo.add(loadIndex)
+              // ^^^ this breaks players and horses haha idk man help me
               ignoredPacketInfo.add(packetProcessIndex)
 
               // Track ignored chunks in case we need them back
@@ -409,7 +413,6 @@ class Replay(replayFile: File) {
 
   fun playNextTick() {
     if (this.tickdex < this.ticks.size) {
-//      val mc = mc as MinecraftAccessor
       this.ticks[this.tickdex].replayFull()
       this.tickdex++
     }
@@ -445,7 +448,14 @@ class Replay(replayFile: File) {
 
   fun skipBackwards(ticks: Int) {
     val targetTick = (this.tickdex - ticks).coerceAtLeast(0)
+    println("target skip tick: $targetTick")
     skipTo(targetTick)
+//    skipping = true
+//    this.restart()
+//    for (i in 0..20) {
+//      mc.runTick()
+//    }
+//    playUntil(targetTick)
   }
 
   fun skipTo(targetTick: Int) {
@@ -475,7 +485,14 @@ class Replay(replayFile: File) {
       }
 
       // Run that join packet
-      this.ticks[0].serverPackets.firstOrNull()?.cookPacket()?.processPacket(netHandler)
+      var joinPacket: Packet<NetHandlerReplayClient>? = null
+      this.ticks.forEach { tick ->
+        tick.serverPackets.firstOrNull { it.packetID == joinGameID }?.let {
+          joinPacket = it.cookPacket()
+          return@forEach
+        }
+      }
+      joinPacket?.processPacket(netHandler)
       val firstTick = this.ticks[latestTickdex]
 
       // Replay important packets that bungee like doesn't care about???

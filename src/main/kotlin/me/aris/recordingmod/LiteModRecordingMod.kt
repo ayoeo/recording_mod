@@ -6,10 +6,12 @@ import com.mumfrey.liteloader.Tickable
 import com.mumfrey.liteloader.modconfig.ConfigPanel
 import com.mumfrey.liteloader.modconfig.ConfigStrategy
 import com.mumfrey.liteloader.modconfig.ExposableOptions
+import me.aris.recordingmod.Recorder.compressRecording
 import me.aris.recordingmod.Recorder.recording
 import me.aris.recordingmod.mixins.MinecraftAccessor
 import me.aris.recordingmod.mixins.TimerAccessor
 import net.minecraft.client.Minecraft
+import org.apache.commons.compress.archivers.sevenz.SevenZFile
 import org.lwjgl.input.Keyboard
 import org.lwjgl.input.Mouse
 import java.io.File
@@ -26,6 +28,15 @@ var activeReplay: Replay? = null
 )
 class LiteModRecordingMod : LiteMod, Tickable, Configurable {
   override fun upgradeSettings(v: String?, c: File?, o: File?) {}
+
+  init {
+//    next thing you do is make a gui
+
+    File("recordings_in_progress").listFiles()?.forEach { file ->
+      println("Found uncompressed recording: $file")
+      compressRecording(file)
+    }
+  }
 
   override fun onTick(
     minecraft: Minecraft,
@@ -122,6 +133,7 @@ fun checkKeybinds(): Boolean {
 
         println("Skipping 5 minutes...")
 
+//        SevenZFile.
         return true
       }
 
@@ -194,7 +206,6 @@ fun preTick(): Boolean {
   // TODO - put this back lol
   mc.player?.rotationYaw = ReplayState.nextYaw
   mc.player?.rotationPitch = ReplayState.nextPitch
-
 
   return false
 }

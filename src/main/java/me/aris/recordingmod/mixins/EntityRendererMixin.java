@@ -69,6 +69,12 @@ abstract class EntityRendererMixin {
         // TODO
       }
 
+      Renderer.INSTANCE.setSystemTime();
     }
+  }
+
+  @Inject(at = @At("TAIL"), method = "updateCameraAndRender")
+  private void postRender(float partialTicks, long nanoTime, CallbackInfo ci) {
+    ReplayState.INSTANCE.setSystemTime(null);
   }
 }

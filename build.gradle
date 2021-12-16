@@ -20,6 +20,7 @@ buildscript {
     classpath 'net.minecraftforge.gradle:ForgeGradle:2.3-SNAPSHOT'
     classpath 'org.spongepowered:mixingradle:0.4-SNAPSHOT'
     classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+
   }
 }
 
@@ -55,6 +56,8 @@ configurations {
 
 dependencies {
   fat "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
+  fat 'org.apache.commons:commons-compress:1.21'
+  fat 'org.tukaani:xz:1.9'
   configurations.implementation.extendsFrom(configurations.fat)
 }
 

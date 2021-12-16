@@ -46,6 +46,11 @@ object PacketIDsLol {
       EnumPacketDirection.CLIENTBOUND,
       SPacketMultiBlockChange()
     )
+  val joinGameID =
+    EnumConnectionState.PLAY.getPacketId(
+      EnumPacketDirection.CLIENTBOUND,
+      SPacketJoinGame()
+    )
   val blockChangeID =
     EnumConnectionState.PLAY.getPacketId(
       EnumPacketDirection.CLIENTBOUND,

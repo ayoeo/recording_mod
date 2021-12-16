@@ -67,12 +67,16 @@ class ReplayTick(
       event.processEvent(ReplayState)
     }
 
+    var spawnedPlayer = false
     serverPackets.withIndex()
       .filterNot { Pair(ourIndex, it.index) in ignorePackets }
       .forEach { (i, rawPacket) ->
         val fixedUpPacketSoHorsesArentBad = when (rawPacket.packetID) {
           spawnPlayerID -> (rawPacket.cookPacket() as SPacketSpawnPlayer).apply {
+            spawnedPlayer = true
+            println("spawn player?: $x, $z, $uniqueId")
             if (!isChunkLoaded(this.x, this.z)) {
+              println("WAIT Player not spawned?: $x, $z, $uniqueId")
               (this as SPacketSpawnPlayerAccessor).setX(mc.player.posX)
               (this as SPacketSpawnPlayerAccessor).setY(-500.0)
               (this as SPacketSpawnPlayerAccessor).setZ(mc.player.posZ)
@@ -108,15 +112,26 @@ class ReplayTick(
 
     mc.entityRenderer.getMouseOver(1.0F)
 
-    // Keybindment
-    val mc = mc as MinecraftAccessor
-    if (mc.leftClickCounter > 0) {
-      --mc.leftClickCounter
+    if (spawnedPlayer) {
+      mc.runTick()
+      println("run it baby")
+    } else {
+      // Keybindment
+      val mc = mc as MinecraftAccessor
+      if (mc.leftClickCounter > 0) {
+        --mc.leftClickCounter
+      }
+      if (mc.rightClickDelayTimer > 0) {
+        --mc.rightClickDelayTimer
+      }
+      mc.invokeProcessKeyBinds()
     }
-    if (mc.rightClickDelayTimer > 0) {
-      --mc.rightClickDelayTimer
-    }
-    mc.invokeProcessKeyBinds()
+
+    // TODO - something player spawn something?
+    // TODO - chunk loading maybe, like it's not done yet? the chunk needs to be loaded first???
+    // TODO - chunk loading maybe, like it's not done yet? the chunk needs to be loaded first???
+    // TODO - chunk loading maybe, like it's not done yet? the chunk needs to be loaded first???
+    // TODO - chunk loading maybe, like it's not done yet? the chunk needs to be loaded first???
   }
 }
 

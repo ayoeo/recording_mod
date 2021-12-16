@@ -1,6 +1,7 @@
 package me.aris.recordingmod
 
 import com.mumfrey.liteloader.gl.GL
+import net.minecraft.client.Minecraft
 import net.minecraft.client.renderer.GlStateManager
 import net.minecraft.client.renderer.OpenGlHelper
 import net.minecraft.client.util.JsonException
@@ -32,7 +33,7 @@ external fun startEncode(
 external fun sendFrame(useBufferB: Boolean)
 external fun finishEncode()
 
-class MappedBuffer(private val bufferSize: Long) {
+class MappedBuffer(bufferSize: Long) {
   private val name = OpenGlHelper.glGenBuffers()
   val data: ByteBuffer
 
@@ -52,7 +53,7 @@ class MappedBuffer(private val bufferSize: Long) {
       null
     )
   }
-
+  
   fun bindBufferBase(index: Int) {
     GL30.glBindBufferBase(GL43.GL_SHADER_STORAGE_BUFFER, index, this.name)
   }
@@ -63,7 +64,7 @@ class MappedBuffer(private val bufferSize: Long) {
 }
 
 class DoubleBufferedChannels(size: Long) {
-  private val yChannelA = MappedBuffer(size)
+  val yChannelA = MappedBuffer(size)
   private val uChannelA = MappedBuffer(size)
   private val vChannelA = MappedBuffer(size)
 
@@ -129,13 +130,14 @@ class DoubleBufferedChannels(size: Long) {
   }
 }
 
-class RendererState(val file: String, val fps: Int) {
-  var pipeThread: Thread? = null
+class RendererState(val file: String, val renderingFps: Int, val videoFps: Int) {
+  val initialSystemTime = Minecraft.getSystemTime()
+  var encodeThread: Thread? = null
   var partialFrames = 0
   var frameIndex = 0
 
   fun checkFinished() {
-    val framesPerTick = fps / 20.0
+    val framesPerTick = renderingFps / 20.0
     if (this.frameIndex >= (Renderer.endTick - Renderer.startTick) * framesPerTick) {
       println("Done rendering: $frameIndex, $framesPerTick")
       Renderer.finishRender()
@@ -182,7 +184,8 @@ val convertProgram = run {
 
 object Renderer {
   init {
-    val dll = File("librecording_mod_native.so")
+//    val dll = File("librecording_mod_native.so")
+    val dll = File("recording_mod_native.dll")
     System.load(dll.absolutePath)
   }
 
@@ -195,19 +198,27 @@ object Renderer {
 
   private var rendererState: RendererState? = null
 
-
   fun startRender() {
-    println("start: $startTick")
+    // Finish up just in case
+    this.finishRender()
+    activeReplay?.skipTo(this.startTick)
+
+//    println("start encode: $startTick")
     // TODO - pass in more options determined by config (codec, frame size)
-    val state = RendererState("filement_woah.mp4", 1200)
+    val frameBlendScale = 1 // TODO - set this in options
+    // TODO - not 600 or do the blend and stuff haha and the speed is weird?
+    val state = RendererState("filement_woah.mp4", 60 * frameBlendScale, 60)
     this.rendererState = state
 
+    val bufferaddr = state.yuvBuffers.yChannelA.data
+//    println("bufferA: $bufferaddr")
+//    println("size: ${mc.displayWidth} ${mc.displayHeight}")
     val pointers = state.yuvBuffers.yuvPointers()
     startEncode(
       state.file,
-      mc.displayWidth,
+      mc.displayWidth, // TODO - broken with non 16:9???
       mc.displayHeight,
-      state.fps,
+      state.videoFps,
       pointers[0],
       pointers[1],
       pointers[2],
@@ -215,8 +226,6 @@ object Renderer {
       pointers[4],
       pointers[5]
     )
-
-    activeReplay?.skipTo(this.startTick)
   }
 
   private fun printTimings(name: String, block: () -> Unit) {
@@ -226,16 +235,17 @@ object Renderer {
 
   fun captureFrame() {
     val state = this.rendererState!!
+//    println("capturing frame: ${state.frameIndex}")
 
     // this has to join before we start changing stuff?? hahahahah
-    state.pipeThread?.join()
+//    println("Joining encode thread: ${state.frameIndex}")
+    state.encodeThread?.join()
 
     // We need to know that our previous buffer is ready to go
     val shouldWrite = state.yuvBuffers.waitForFence()
     state.yuvBuffers.swap()
 
     //-------------------Compute shader stuff-------------------//
-    // /ahaha
     OpenGlHelper.glUseProgram(convertProgram)
 
     // Use mc's framebuffer as the input image
@@ -267,21 +277,23 @@ object Renderer {
     // TODO - prevent resizing really tho hhahahahahaheheah
 
     // TODO - stop buffer a from being written somehow
-    state.pipeThread = Thread {
-      // TODO
-      //  startRender() -> set frame data to generated/mapped opengl buffers
-      //  each frame in this thread -> call send_frame() and receive_packet()
-      //  when those calls are done, the thread can join because we encoded a frame : o
+    if (shouldWrite) {
+      state.encodeThread = Thread {
+        // TODO
+        //  startRender() -> set frame data to generated/mapped opengl buffers
+        //  each frame in this thread -> call send_frame() and receive_packet()
+        //  when those calls are done, the thread can join because we encoded a frame : o
 
-      printTimings("encode") {
+//        println("Sending frame: ${state.frameIndex}")
+//      sendFrame(!state.yuvBuffers.useBufferB) // write from the buffer not in use (inverted)
         sendFrame(!state.yuvBuffers.useBufferB) // write from the buffer not in use (inverted)
       }
+
+      // We don't have data for the first frame, so... drop it hahahahhahahahhahhaha
+//      println("Starting render frame thread: ${state.frameIndex}")
+      rendererState?.encodeThread?.start()
     }
 
-    // We don't have data for the first frame, so... drop it hahahahhahahahhahhaha
-    if (shouldWrite) {
-      rendererState?.pipeThread?.start()
-    }
     state.frameIndex++
     state.partialFrames++
     state.checkFinished()
@@ -289,7 +301,7 @@ object Renderer {
 
   internal fun finishRender() {
     this.rendererState?.let { state ->
-      state.pipeThread?.join()
+      state.encodeThread?.join()
 
       finishEncode()
 
@@ -297,33 +309,38 @@ object Renderer {
       // TODO - we need to finish writing the buffers here and stuff hahahahahaha (or just don't idc)
       state.yuvBuffers.delete()
     }
-    ReplayState.systemTime = null
 
     this.rendererState = null
   }
 
-  fun cancelRender() {
-    TODO("Finish and then delete the file? lol")
-  }
-
   fun pauseRender() {
+    // TODO - this is just like normal pause...
+
     TODO("just stop advancing each frame")
   }
 
   fun unpauseRender() {
+    // TODO - this is also just like normal pause...
+
     TODO("um... keep advancing each frame?")
+  }
+
+  fun setSystemTime() {
+    val state = this.rendererState
+    if (state != null) {
+      val framesPerTick = state.renderingFps / 20
+      // Time for shaders and such
+      // TODO - this is broken...
+      //  does weird stuff and glitches out...
+      // TODO - turned off to monitor fps
+      ReplayState.systemTime =
+        state.initialSystemTime + ((state.frameIndex / framesPerTick.toFloat()) * 50).toLong()
+    }
   }
 
   fun getTickData(): Pair<Int, Float> {
     val state = this.rendererState!!
-
-    val framesPerTick = state.fps / 20
-
-    // Time for shaders and such
-//    ReplayState.systemTime =
-//      state.initialSystemTime + ((state.frameIndex / framesPerTick.toFloat()) * 50).toLong()
-    // TODO - turned off to monitor fps
-
+    val framesPerTick = state.renderingFps / 20
 
     val elapsedTicks = if (state.partialFrames > framesPerTick) {
       state.partialFrames -= framesPerTick

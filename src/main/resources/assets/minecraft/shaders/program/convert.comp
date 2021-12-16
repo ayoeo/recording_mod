@@ -10,6 +10,7 @@ layout(binding = 2) writeonly buffer U { uint u_ch[]; };
 
 layout(binding = 3) writeonly buffer V { uint v_ch[]; };
 
+
 vec3 color_at(uint x, uint y) {
   return imageLoad(input_image, ivec2(x, y)).rgb;
 }

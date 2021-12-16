@@ -24,7 +24,6 @@ abstract class GuiScreenMixin {
           Minecraft.getMinecraft().getRenderPartialTicks()
         )
       );
-      System.out.println("when key is typed: " + typedChar);
     }
     ((GuiScreenAccessor) instance).invokeKeyTyped(typedChar, keyCode);
   }

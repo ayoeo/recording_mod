@@ -5,29 +5,31 @@ import io.netty.buffer.Unpooled
 import me.aris.recordingmod.mixins.GuiScreenAccessor
 import net.minecraft.client.gui.ScaledResolution
 import net.minecraft.network.PacketBuffer
+import org.apache.commons.compress.archivers.sevenz.SevenZArchiveEntry
+import org.apache.commons.compress.archivers.sevenz.SevenZOutputFile
 import org.lwjgl.input.Mouse
 import sun.awt.Mutex
-import java.io.BufferedOutputStream
-import java.io.File
-import java.io.FileOutputStream
+import java.io.*
+import java.nio.file.Files
 import java.text.SimpleDateFormat
 import java.util.*
 
+
 data class MousePosition(val x: Float, val y: Float) {
   fun getScaledXY() =
-    Pair((x * mc.displayWidth.toFloat()).toInt(), (y * mc.displayHeight.toFloat()).toInt())
+      Pair((x * mc.displayWidth.toFloat()).toInt(), (y * mc.displayHeight.toFloat()).toInt())
 }
 
 data class GuiInputEventWithMoreStuff(
-  val event: GuiInputEvent,
-  val time: Long,
-  val partialTicks: Float
+    val event: GuiInputEvent,
+    val time: Long,
+    val partialTicks: Float
 )
 
 data class CameraRotation(
-  val yaw: Float,
-  val pitch: Float,
-  val partialTicks: Float
+    val yaw: Float,
+    val pitch: Float,
+    val partialTicks: Float
 ) {
   fun timestamped(tickdex: Int) = TimestampedRotation(yaw, pitch, Timestamp(tickdex, partialTicks))
 
@@ -38,20 +40,20 @@ sealed class GuiInputEvent {
     fun readEvent(id: Int, buffer: PacketBuffer) = when (id) {
       -1 -> KeyTypedEvent(buffer.readChar(), buffer.readVarInt())
       -2 -> MouseClickedEvent(
-        buffer.readVarInt(),
-        buffer.readVarInt(),
-        buffer.readVarInt()
+          buffer.readVarInt(),
+          buffer.readVarInt(),
+          buffer.readVarInt()
       )
       -3 -> MouseReleasedEvent(
-        buffer.readVarInt(),
-        buffer.readVarInt(),
-        buffer.readVarInt()
+          buffer.readVarInt(),
+          buffer.readVarInt(),
+          buffer.readVarInt()
       )
       -4 -> MouseClickMoveEvent(
-        buffer.readVarInt(),
-        buffer.readVarInt(),
-        buffer.readVarInt(),
-        buffer.readLong()
+          buffer.readVarInt(),
+          buffer.readVarInt(),
+          buffer.readVarInt(),
+          buffer.readLong()
       )
       -5 -> ScrollEvent(buffer.readVarInt())
 
@@ -63,8 +65,8 @@ sealed class GuiInputEvent {
   abstract fun process()
 
   data class KeyTypedEvent(
-    val typedChar: Char,
-    val keyCode: Int
+      val typedChar: Char,
+      val keyCode: Int
   ) : GuiInputEvent() {
     override fun writeEvent(buffer: PacketBuffer) {
       buffer.writeVarInt(-1)
@@ -80,9 +82,9 @@ sealed class GuiInputEvent {
   }
 
   data class MouseClickedEvent(
-    val mouseX: Int,
-    val mouseY: Int,
-    val mouseButton: Int
+      val mouseX: Int,
+      val mouseY: Int,
+      val mouseButton: Int
   ) : GuiInputEvent() {
     override fun writeEvent(buffer: PacketBuffer) {
       buffer.writeVarInt(-2)
@@ -96,18 +98,18 @@ sealed class GuiInputEvent {
       if (screen != null) {
         screen.setEventButton(this.mouseButton)
         (screen as GuiScreenAccessor?)?.invokeMouseClicked(
-          this.mouseX,
-          this.mouseY,
-          this.mouseButton
+            this.mouseX,
+            this.mouseY,
+            this.mouseButton
         )
       }
     }
   }
 
   data class MouseReleasedEvent(
-    val mouseX: Int,
-    val mouseY: Int,
-    val state: Int
+      val mouseX: Int,
+      val mouseY: Int,
+      val state: Int
   ) : GuiInputEvent() {
     override fun writeEvent(buffer: PacketBuffer) {
       buffer.writeVarInt(-3)
@@ -121,19 +123,19 @@ sealed class GuiInputEvent {
       if (screen != null) {
         screen.setEventButton(-1)
         screen.invokeMouseReleased(
-          this.mouseX,
-          this.mouseY,
-          this.state
+            this.mouseX,
+            this.mouseY,
+            this.state
         )
       }
     }
   }
 
   data class MouseClickMoveEvent(
-    val mouseX: Int,
-    val mouseY: Int,
-    val clickedMouseButton: Int,
-    val timeSinceLastClick: Long
+      val mouseX: Int,
+      val mouseY: Int,
+      val clickedMouseButton: Int,
+      val timeSinceLastClick: Long
   ) : GuiInputEvent() {
     override fun writeEvent(buffer: PacketBuffer) {
       buffer.writeVarInt(-4)
@@ -145,10 +147,10 @@ sealed class GuiInputEvent {
 
     override fun process() {
       (mc.currentScreen as GuiScreenAccessor?)?.invokeMouseClickMove(
-        this.mouseX,
-        this.mouseY,
-        this.clickedMouseButton,
-        this.timeSinceLastClick
+          this.mouseX,
+          this.mouseY,
+          this.clickedMouseButton,
+          this.timeSinceLastClick
       )
     }
   }
@@ -160,7 +162,7 @@ sealed class GuiInputEvent {
     }
 
     private val eventDwheel = Mouse::class.java.getDeclaredField("event_dwheel")
-      .apply { this.isAccessible = true }
+        .apply { this.isAccessible = true }
 
     override fun process() {
       eventDwheel.setInt(null, dwheel)
@@ -170,15 +172,15 @@ sealed class GuiInputEvent {
 }
 
 data class RenderedPosition(
-  val partialTicks: Float,
-  val position: MousePosition
+    val partialTicks: Float,
+    val position: MousePosition
 ) {
   fun getUIPosition(): Pair<Int, Int> {
     val scaledX = this.position.x * mc.displayWidth.toFloat()
     val scaledY = this.position.y * mc.displayHeight.toFloat()
     val i = scaledX * mc.currentScreen!!.width / mc.displayWidth
     val j =
-      mc.currentScreen!!.height - scaledY * mc.currentScreen!!.height / mc.displayHeight - 1
+        mc.currentScreen!!.height - scaledY * mc.currentScreen!!.height / mc.displayHeight - 1
     return Pair(i.toInt(), j.toInt())
   }
 
@@ -193,8 +195,8 @@ data class RenderedPosition(
     val deltaY = this.position.y - prev.position.y
 
     return MousePosition(
-      deltaX * partialPartialTicks + prev.position.x,
-      deltaY * partialPartialTicks + prev.position.y
+        deltaX * partialPartialTicks + prev.position.x,
+        deltaY * partialPartialTicks + prev.position.y
     )
   }
 }
@@ -204,7 +206,8 @@ object Recorder {
   var writeLaterLock = Mutex()
   var toWritelater: ByteBuf = Unpooled.directBuffer(1024 * 1024 * 50)
 
-  private var recordingFile: BufferedOutputStream? = null
+  private var recordingFile: File? = null
+  private var recordingFileStream: BufferedOutputStream? = null
 
   // Gui stuff idk
   val cursorPositions = mutableListOf<RenderedPosition>()
@@ -230,9 +233,9 @@ object Recorder {
     val formatter = SimpleDateFormat("yyyy_MM_dd_HH_mm_ss")
     val formatedDate = formatter.format(date)
 
-    File("recordings").mkdirs()
-    val filePath = File("recordings/$formatedDate.rec")
-    recordingFile = BufferedOutputStream(FileOutputStream(filePath, true))
+    File("recordings_in_progress").mkdirs()
+    recordingFile = File("recordings_in_progress/$formatedDate.partalrec")
+    recordingFileStream = BufferedOutputStream(FileOutputStream(recordingFile!!, true))
 
     recording = true
     recordingThread = Thread {
@@ -240,7 +243,7 @@ object Recorder {
         // File writes
         writeLaterLock.lock()
         val index = toWritelater.writerIndex()
-        toWritelater.readBytes(recordingFile, index)
+        toWritelater.readBytes(recordingFileStream, index)
         toWritelater.clear()
         writeLaterLock.unlock()
 
@@ -253,7 +256,32 @@ object Recorder {
   fun leaveGame() {
     recording = false
     recordingThread?.join()
-    recordingFile?.close()
+    recordingFileStream?.close()
+
+    // Compression moment
+    compressRecording(recordingFile!!)
+  }
+
+  fun compressRecording(recordingFile: File) {
+    println("compressioning...")
+    val thread = Thread {
+      try {
+        File("recordings").mkdirs()
+        val partFile = File("recordings/${recordingFile.nameWithoutExtension}.part")
+        val output = SevenZOutputFile(partFile)
+        output.putArchiveEntry(output.createArchiveEntry(recordingFile, recordingFile.nameWithoutExtension))
+        output.write(Files.readAllBytes(recordingFile.toPath()))
+        output.closeArchiveEntry()
+        output.finish()
+        output.close()
+        partFile.renameTo(File("recordings/${recordingFile.nameWithoutExtension}.rec"))
+        recordingFile.delete()
+        println("it's been compressioned... ${recordingFile.nameWithoutExtension}.rec")
+      } catch (e: IOException) {
+        e.printStackTrace()
+      }
+    }
+    thread.start()
   }
 
   // TODO - option to 'mark' current tick as a POI type thing

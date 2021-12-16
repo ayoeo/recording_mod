@@ -72,19 +72,20 @@ abstract class MinecraftMixin {
 
   @Inject(at = @At("HEAD"), method = "runGameLoop", cancellable = true)
   private void preGameLoop(CallbackInfo ci) {
-    if (Keyboard.isKeyDown(Keyboard.KEY_M)) {
+    if (LiteModRecordingModKt.getActiveReplay() != null) {
+      if (Keyboard.isKeyDown(Keyboard.KEY_M)) {
 //      this.resize(2560, 1440);
-      this.resize(3840, 2160);
+        this.resize(3840, 2160);
 //      this.resize(7680, 4320);
 //      this.resize(640, 360);
-      ScaledResolution res = new ScaledResolution(getMinecraft());
-      System.out.println("360p: " + res.getScaledWidth() + ", " + res.getScaledHeight());
-    } else if (Keyboard.isKeyDown(Keyboard.KEY_N)) {
-      this.resize(640, 360);
-      ScaledResolution res = new ScaledResolution(getMinecraft());
-      System.out.println("1080p: " + res.getScaledWidth() + ", " + res.getScaledHeight());
-    }
-    if (LiteModRecordingModKt.getActiveReplay() != null) {
+        ScaledResolution res = new ScaledResolution(getMinecraft());
+        System.out.println("360p: " + res.getScaledWidth() + ", " + res.getScaledHeight());
+      } else if (Keyboard.isKeyDown(Keyboard.KEY_N)) {
+        this.resize(640, 360);
+        ScaledResolution res = new ScaledResolution(getMinecraft());
+        System.out.println("1080p: " + res.getScaledWidth() + ", " + res.getScaledHeight());
+      }
+
       if (LiteModRecordingModKt.preGameLoop())
         ci.cancel();
     }
