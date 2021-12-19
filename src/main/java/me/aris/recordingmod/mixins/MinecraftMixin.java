@@ -4,9 +4,7 @@ import kotlin.Pair;
 import me.aris.recordingmod.*;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.EntityPlayerSP;
-import net.minecraft.client.gui.GuiIngame;
-import net.minecraft.client.gui.GuiScreen;
-import net.minecraft.client.gui.ScaledResolution;
+import net.minecraft.client.gui.*;
 import net.minecraft.client.settings.GameSettings;
 import org.lwjgl.input.Keyboard;
 import org.lwjgl.input.Mouse;
@@ -103,6 +101,10 @@ abstract class MinecraftMixin {
     if (Recorder.INSTANCE.getRecording()) {
       if (guiScreenIn == null) {
         ClientEvent.writeClientEvent(ClientEvent.CloseScreen.INSTANCE);
+      }
+     
+      if ((guiScreenIn instanceof GuiMainMenu || guiScreenIn instanceof GuiMultiplayer) && Recorder.INSTANCE.getRecording()) {
+        Recorder.INSTANCE.leaveGame();
       }
     }
   }

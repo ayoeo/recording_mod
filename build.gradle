@@ -99,6 +99,7 @@ jar {
       it.isDirectory() ? it : zipTree(it)
     }
   }
+  exclude "**/module-info.class"
   exclude 'META-INF/*.RSA', 'META-INF/*.SF', 'META-INF/*.DSA'
 }
 

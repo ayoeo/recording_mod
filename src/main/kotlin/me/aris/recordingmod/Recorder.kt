@@ -2,34 +2,41 @@ package me.aris.recordingmod
 
 import io.netty.buffer.ByteBuf
 import io.netty.buffer.Unpooled
+import me.aris.recordingmod.Recorder.recording
+import me.aris.recordingmod.Recorder.recordingFile
+import me.aris.recordingmod.Recorder.tickdex
+import me.aris.recordingmod.Recorder.toWritelater
+import me.aris.recordingmod.Recorder.writeLaterLock
 import me.aris.recordingmod.mixins.GuiScreenAccessor
 import net.minecraft.client.gui.ScaledResolution
 import net.minecraft.network.PacketBuffer
-import org.apache.commons.compress.archivers.sevenz.SevenZArchiveEntry
 import org.apache.commons.compress.archivers.sevenz.SevenZOutputFile
 import org.lwjgl.input.Mouse
 import sun.awt.Mutex
-import java.io.*
+import java.io.BufferedOutputStream
+import java.io.File
+import java.io.FileOutputStream
+import java.io.IOException
 import java.nio.file.Files
 import java.text.SimpleDateFormat
 import java.util.*
-
+import javax.sound.sampled.*
 
 data class MousePosition(val x: Float, val y: Float) {
   fun getScaledXY() =
-      Pair((x * mc.displayWidth.toFloat()).toInt(), (y * mc.displayHeight.toFloat()).toInt())
+    Pair((x * mc.displayWidth.toFloat()).toInt(), (y * mc.displayHeight.toFloat()).toInt())
 }
 
 data class GuiInputEventWithMoreStuff(
-    val event: GuiInputEvent,
-    val time: Long,
-    val partialTicks: Float
+  val event: GuiInputEvent,
+  val time: Long,
+  val partialTicks: Float
 )
 
 data class CameraRotation(
-    val yaw: Float,
-    val pitch: Float,
-    val partialTicks: Float
+  val yaw: Float,
+  val pitch: Float,
+  val partialTicks: Float
 ) {
   fun timestamped(tickdex: Int) = TimestampedRotation(yaw, pitch, Timestamp(tickdex, partialTicks))
 
@@ -40,20 +47,20 @@ sealed class GuiInputEvent {
     fun readEvent(id: Int, buffer: PacketBuffer) = when (id) {
       -1 -> KeyTypedEvent(buffer.readChar(), buffer.readVarInt())
       -2 -> MouseClickedEvent(
-          buffer.readVarInt(),
-          buffer.readVarInt(),
-          buffer.readVarInt()
+        buffer.readVarInt(),
+        buffer.readVarInt(),
+        buffer.readVarInt()
       )
       -3 -> MouseReleasedEvent(
-          buffer.readVarInt(),
-          buffer.readVarInt(),
-          buffer.readVarInt()
+        buffer.readVarInt(),
+        buffer.readVarInt(),
+        buffer.readVarInt()
       )
       -4 -> MouseClickMoveEvent(
-          buffer.readVarInt(),
-          buffer.readVarInt(),
-          buffer.readVarInt(),
-          buffer.readLong()
+        buffer.readVarInt(),
+        buffer.readVarInt(),
+        buffer.readVarInt(),
+        buffer.readLong()
       )
       -5 -> ScrollEvent(buffer.readVarInt())
 
@@ -65,8 +72,8 @@ sealed class GuiInputEvent {
   abstract fun process()
 
   data class KeyTypedEvent(
-      val typedChar: Char,
-      val keyCode: Int
+    val typedChar: Char,
+    val keyCode: Int
   ) : GuiInputEvent() {
     override fun writeEvent(buffer: PacketBuffer) {
       buffer.writeVarInt(-1)
@@ -82,9 +89,9 @@ sealed class GuiInputEvent {
   }
 
   data class MouseClickedEvent(
-      val mouseX: Int,
-      val mouseY: Int,
-      val mouseButton: Int
+    val mouseX: Int,
+    val mouseY: Int,
+    val mouseButton: Int
   ) : GuiInputEvent() {
     override fun writeEvent(buffer: PacketBuffer) {
       buffer.writeVarInt(-2)
@@ -98,18 +105,18 @@ sealed class GuiInputEvent {
       if (screen != null) {
         screen.setEventButton(this.mouseButton)
         (screen as GuiScreenAccessor?)?.invokeMouseClicked(
-            this.mouseX,
-            this.mouseY,
-            this.mouseButton
+          this.mouseX,
+          this.mouseY,
+          this.mouseButton
         )
       }
     }
   }
 
   data class MouseReleasedEvent(
-      val mouseX: Int,
-      val mouseY: Int,
-      val state: Int
+    val mouseX: Int,
+    val mouseY: Int,
+    val state: Int
   ) : GuiInputEvent() {
     override fun writeEvent(buffer: PacketBuffer) {
       buffer.writeVarInt(-3)
@@ -123,19 +130,19 @@ sealed class GuiInputEvent {
       if (screen != null) {
         screen.setEventButton(-1)
         screen.invokeMouseReleased(
-            this.mouseX,
-            this.mouseY,
-            this.state
+          this.mouseX,
+          this.mouseY,
+          this.state
         )
       }
     }
   }
 
   data class MouseClickMoveEvent(
-      val mouseX: Int,
-      val mouseY: Int,
-      val clickedMouseButton: Int,
-      val timeSinceLastClick: Long
+    val mouseX: Int,
+    val mouseY: Int,
+    val clickedMouseButton: Int,
+    val timeSinceLastClick: Long
   ) : GuiInputEvent() {
     override fun writeEvent(buffer: PacketBuffer) {
       buffer.writeVarInt(-4)
@@ -147,10 +154,10 @@ sealed class GuiInputEvent {
 
     override fun process() {
       (mc.currentScreen as GuiScreenAccessor?)?.invokeMouseClickMove(
-          this.mouseX,
-          this.mouseY,
-          this.clickedMouseButton,
-          this.timeSinceLastClick
+        this.mouseX,
+        this.mouseY,
+        this.clickedMouseButton,
+        this.timeSinceLastClick
       )
     }
   }
@@ -162,7 +169,7 @@ sealed class GuiInputEvent {
     }
 
     private val eventDwheel = Mouse::class.java.getDeclaredField("event_dwheel")
-        .apply { this.isAccessible = true }
+      .apply { this.isAccessible = true }
 
     override fun process() {
       eventDwheel.setInt(null, dwheel)
@@ -172,15 +179,15 @@ sealed class GuiInputEvent {
 }
 
 data class RenderedPosition(
-    val partialTicks: Float,
-    val position: MousePosition
+  val partialTicks: Float,
+  val position: MousePosition
 ) {
   fun getUIPosition(): Pair<Int, Int> {
     val scaledX = this.position.x * mc.displayWidth.toFloat()
     val scaledY = this.position.y * mc.displayHeight.toFloat()
     val i = scaledX * mc.currentScreen!!.width / mc.displayWidth
     val j =
-        mc.currentScreen!!.height - scaledY * mc.currentScreen!!.height / mc.displayHeight - 1
+      mc.currentScreen!!.height - scaledY * mc.currentScreen!!.height / mc.displayHeight - 1
     return Pair(i.toInt(), j.toInt())
   }
 
@@ -195,18 +202,18 @@ data class RenderedPosition(
     val deltaY = this.position.y - prev.position.y
 
     return MousePosition(
-        deltaX * partialPartialTicks + prev.position.x,
-        deltaY * partialPartialTicks + prev.position.y
+      deltaX * partialPartialTicks + prev.position.x,
+      deltaY * partialPartialTicks + prev.position.y
     )
   }
 }
 
 object Recorder {
-  private var tickdex = 0L
+  var tickdex = 0L
   var writeLaterLock = Mutex()
   var toWritelater: ByteBuf = Unpooled.directBuffer(1024 * 1024 * 50)
 
-  private var recordingFile: File? = null
+  var recordingFile: File? = null
   private var recordingFileStream: BufferedOutputStream? = null
 
   // Gui stuff idk
@@ -224,6 +231,10 @@ object Recorder {
   @Volatile
   var recording = false
   private var recordingThread: Thread? = null
+  private var inputRecordingThread: Thread? = null
+  private var outputRecordingThread: Thread? = null
+  private var inLine: TargetDataLine? = null
+  private var outLine: TargetDataLine? = null
 
   fun joinGame() {
     tickdex = 0
@@ -251,11 +262,128 @@ object Recorder {
       }
     }
     recordingThread!!.start()
+
+    try {
+      val format = AudioFormat(48000f, 16, 1, true, false)
+      val info = DataLine.Info(TargetDataLine::class.java, format)
+
+      if (!AudioSystem.isLineSupported(info)) {
+        println("idk its fucked")
+      } else {
+        println("info?? $info ${info.formats}")
+        inLine = AudioSystem.getLine(info) as TargetDataLine
+        inLine?.open()
+        inLine?.start()
+
+//        val format = AudioFormat(48000f, 16, 1, true, false)
+//        val micInfo = DataLine.Info(TargetDataLine::class.java, format)
+//        val formatOut = AudioFormat(48000f, 16, 2, true, false)
+//        val speakerInfo = DataLine.Info(TargetDataLine::class.java, formatOut)
+//        mixers@ for (mixerInfo in AudioSystem.getMixerInfo()) {
+//          val mixer = AudioSystem.getMixer(mixerInfo)
+//          println("mixer: ${mixer.mixerInfo}")
+////          mixer.open()
+//
+//          if (mixer.isLineSupported(speakerInfo)) {
+//            for (mifo in AudioSystem.getMixerInfo()) {
+//              val portString = "Port "
+////              if ((portString + mixerInfo.name) == mifo.name) {
+//              println("minfo: ${mifo.name}")
+//              val portMixer = AudioSystem.getMixer(mifo)
+//              portMixer.open()
+//              val suppor =
+//                portMixer.isLineSupported(Port.Info.HEADPHONE) || portMixer.isLineSupported(Port.Info.SPEAKER)
+//              println("mic suppor? $suppor")
+//              if (suppor) {
+////                outLine = mixer.getLine(speakerInfo) as TargetDataLine
+//                mixer.targetLines.forEach {
+//                  println("its line::: $it")
+//                  outLine = it as TargetDataLine
+//                  outLine?.open()
+//                  outLine?.start()
+//                  // TODO - this almost worked?? nad it wa the same in as out??
+//                  return@forEach
+//                }
+//                break@mixers
+//              }
+////              }
+//            }
+//          }
+//        }
+//        targetDataLine = (TargetDataLine) targetMixer.getLine(targetDataLineInfo);
+//        outLine = AudioSystem.getLine(infoOut) as SourceDataLine
+//        outLine?.open()
+//        outLine?.start()
+
+//        if (AudioSystem.isLineSupported(Port.Info.MICROPHONE)) {
+//          val line = AudioSystem.getLine(Port.Info.MICROPHONE)
+//          println("I;'m a line: $line")
+//        }
+      }
+
+//      println("dataline: $dataline")
+//          mixer.open()
+
+    } catch (ex: Exception) {
+      ex.printStackTrace()
+    }
+//      } else if (mixer.isLineSupported(Port.Info.HEADPHONE) || mixer.isLineSupported(Port.Info.SPEAKER)) {
+    try {
+//      mixer.open()
+//      println("mixer: ${mixer.sourceLineInfo.size} ${mixer.targetLineInfo.size}")
+//      println("lines: ${mixer.sourceLines.size} ${mixer.targetLines.size}")
+
+//      var line: Line?
+//      for (info in mixer.targetLineInfo) {
+//        println("info $info")
+//        line = AudioSystem.getLine(info)
+//        println("line $line")
+//        if (line is DataLine) {
+//          val format = line.format
+//          println("format: $format")
+//        }
+//      }
+//          val format = AudioFormat(44100f, 8, 2, true, false)
+//          mixer.open()
+//          for (format in AudioSystem.getmix)
+//          outLine = AudioSystem.getTargetDataLine(format, mixerInfo) as TargetDataLine
+//          outLine!!.open()
+//          outLine!!.start()
+    } catch (ex: Exception) {
+      ex.printStackTrace()
+    }
+//      }
+//    }
+
+    inputRecordingThread = Thread {
+      inLine?.let {
+        AudioSystem.write(
+          AudioInputStream(it),
+          AudioFileFormat.Type.WAVE,
+          File("recordings_in_progress", "mic-${recordingFile!!.nameWithoutExtension}.wav")
+        )
+      }
+    }
+    outputRecordingThread = Thread {
+      outLine?.let {
+        AudioSystem.write(AudioInputStream(it), AudioFileFormat.Type.WAVE, File("out.wav"))
+      }
+    }
+    inputRecordingThread!!.start()
+    outputRecordingThread!!.start()
   }
 
   fun leaveGame() {
     recording = false
     recordingThread?.join()
+
+    // STOP AUDIO STOP
+    inLine?.close()
+    outLine?.close()
+    inLine = null
+    outLine = null
+    inputRecordingThread?.join()
+    outputRecordingThread?.join()
     recordingFileStream?.close()
 
     // Compression moment
@@ -266,16 +394,40 @@ object Recorder {
     println("compressioning...")
     val thread = Thread {
       try {
-        File("recordings").mkdirs()
-        val partFile = File("recordings/${recordingFile.nameWithoutExtension}.part")
+        File(LiteModRecordingMod.mod.recordingPath).mkdirs()
+        val partFile =
+          File(LiteModRecordingMod.mod.recordingPath, "${recordingFile.nameWithoutExtension}.part")
         val output = SevenZOutputFile(partFile)
-        output.putArchiveEntry(output.createArchiveEntry(recordingFile, recordingFile.nameWithoutExtension))
+        output.putArchiveEntry(
+          output.createArchiveEntry(
+            recordingFile,
+            recordingFile.nameWithoutExtension
+          )
+        )
         output.write(Files.readAllBytes(recordingFile.toPath()))
         output.closeArchiveEntry()
+
+        val micfile =
+          File("recordings_in_progress", "mic-${recordingFile.nameWithoutExtension}.wav")
+        output.putArchiveEntry(
+          output.createArchiveEntry(
+            micfile,
+            "${micfile.nameWithoutExtension}.wav"
+          )
+        )
+        output.write(Files.readAllBytes(micfile.toPath()))
+        output.closeArchiveEntry()
+
         output.finish()
         output.close()
-        partFile.renameTo(File("recordings/${recordingFile.nameWithoutExtension}.rec"))
+        partFile.renameTo(
+          File(
+            LiteModRecordingMod.mod.recordingPath,
+            "${recordingFile.nameWithoutExtension}.rec"
+          )
+        )
         recordingFile.delete()
+        micfile.delete()
         println("it's been compressioned... ${recordingFile.nameWithoutExtension}.rec")
       } catch (e: IOException) {
         e.printStackTrace()
