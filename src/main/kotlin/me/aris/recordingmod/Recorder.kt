@@ -214,6 +214,7 @@ object Recorder {
   var toWritelater: ByteBuf = Unpooled.directBuffer(1024 * 1024 * 50)
 
   var recordingFile: File? = null
+  var compressThread: Thread? = null
   private var recordingFileStream: BufferedOutputStream? = null
 
   // Gui stuff idk
@@ -245,7 +246,7 @@ object Recorder {
     val formatedDate = formatter.format(date)
 
     File("recordings_in_progress").mkdirs()
-    recordingFile = File("recordings_in_progress/$formatedDate.partalrec")
+    recordingFile = File("recordings_in_progress/$formatedDate.partialrec")
     recordingFileStream = BufferedOutputStream(FileOutputStream(recordingFile!!, true))
 
     recording = true
@@ -387,53 +388,44 @@ object Recorder {
     recordingFileStream?.close()
 
     // Compression moment
-    compressRecording(recordingFile!!)
+    if (this.compressThread?.isAlive != true) {
+      this.compressThread = Thread() {
+        LiteModRecordingMod.checkAndCompressFiles()
+      }
+      this.compressThread!!.start()
+    }
   }
 
   fun compressRecording(recordingFile: File) {
     println("compressioning...")
-    val thread = Thread {
-      try {
-        File(LiteModRecordingMod.mod.recordingPath).mkdirs()
-        val partFile =
-          File(LiteModRecordingMod.mod.recordingPath, "${recordingFile.nameWithoutExtension}.part")
-        val output = SevenZOutputFile(partFile)
-        output.putArchiveEntry(
-          output.createArchiveEntry(
-            recordingFile,
-            recordingFile.nameWithoutExtension
-          )
-        )
-        output.write(Files.readAllBytes(recordingFile.toPath()))
-        output.closeArchiveEntry()
+    try {
+      File(LiteModRecordingMod.mod.recordingPath).mkdirs()
 
-        val micfile =
-          File("recordings_in_progress", "mic-${recordingFile.nameWithoutExtension}.wav")
-        output.putArchiveEntry(
-          output.createArchiveEntry(
-            micfile,
-            "${micfile.nameWithoutExtension}.wav"
-          )
+      val newRecordingFile = File(recordingFile.parent, recordingFile.nameWithoutExtension)
+      recordingFile.renameTo(newRecordingFile)
+      val micfile =
+        File("recordings_in_progress", "mic-${recordingFile.nameWithoutExtension}.wav")
+      val proc = Runtime.getRuntime()
+        .exec(
+          "7z.exe a -t7z -sdel \"${
+            File(
+              File(LiteModRecordingMod.mod.recordingPath).absolutePath,
+              newRecordingFile.nameWithoutExtension
+            )
+          }.rec\" \"${newRecordingFile.name}\" \"${micfile.name}\"",
+          arrayOf(),
+          File("recordings_in_progress")
         )
-        output.write(Files.readAllBytes(micfile.toPath()))
-        output.closeArchiveEntry()
+      proc.waitFor()
 
-        output.finish()
-        output.close()
-        partFile.renameTo(
-          File(
-            LiteModRecordingMod.mod.recordingPath,
-            "${recordingFile.nameWithoutExtension}.rec"
-          )
-        )
-        recordingFile.delete()
-        micfile.delete()
-        println("it's been compressioned... ${recordingFile.nameWithoutExtension}.rec")
-      } catch (e: IOException) {
-        e.printStackTrace()
-      }
+      // deletingg..
+//      newRecordingFile.delete()
+//      micfile.delete()
+
+      println("it's been compressioned... ${recordingFile.nameWithoutExtension}.rec")
+    } catch (e: IOException) {
+      e.printStackTrace()
     }
-    thread.start()
   }
 
   // TODO - option to 'mark' current tick as a POI type thing

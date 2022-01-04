@@ -17,7 +17,9 @@ class RecordingModConfigPanel : AbstractConfigPanel() {
 
   override fun addOptions(host: ConfigPanelHost) {
     this.addControl(GuiButton(0, 0, 0, "Help")) {
-      mc.displayGuiScreen(RecordingGui())
+      activeReplay = Replay(File(LiteModRecordingMod.mod.recordingPath, "help"))
+      activeReplay?.restart()
+//      mc.displayGuiScreen(RecordingGui())
     }
 
     this.recordingPath = this.addTextField(0, 0, 35, 100, 30)

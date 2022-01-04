@@ -9,7 +9,9 @@ import com.mumfrey.liteloader.core.LiteLoader
 import com.mumfrey.liteloader.modconfig.ConfigPanel
 import com.mumfrey.liteloader.modconfig.ConfigStrategy
 import com.mumfrey.liteloader.modconfig.ExposableOptions
+import me.aris.recordingmod.LiteModRecordingMod.Companion.mod
 import me.aris.recordingmod.Recorder.compressRecording
+import me.aris.recordingmod.Recorder.compressThread
 import me.aris.recordingmod.Recorder.recording
 import me.aris.recordingmod.Recorder.recordingFile
 import me.aris.recordingmod.Recorder.tickdex
@@ -112,9 +114,14 @@ class MarkItGui : GuiScreen() {
       0 -> {
         val recordingName = recordingFile!!.nameWithoutExtension
         File("markers").mkdirs()
+        var s = nameOfTheMahkah.text.replace("[\\\\/:*?\"<>|]".toRegex(), "_");
+        while (File("markers", "$s-$recordingName").exists()) {
+          s += "_"
+        }
+
         File(
           "markers",
-          "${nameOfTheMahkah.text.replace(' ', '_')}-$recordingName"
+          "$s-$recordingName"
         ).writeText("$tickdex")
         Minecraft.getMinecraft().displayGuiScreen(null)
       }
@@ -132,7 +139,7 @@ class RecordingsList(
   private val recordings = mutableListOf<RecordingEntry>()
 
   init {
-    File(LiteModRecordingMod.mod.recordingPath)
+    File(mod.recordingPath)
       .listFiles()
       ?.filter { it.extension == "rec" }
       ?.withIndex()?.forEach { (i, file) ->
@@ -202,22 +209,31 @@ class LiteModRecordingMod : LiteMod, Tickable, Configurable {
 
   companion object {
     lateinit var mod: LiteModRecordingMod
+
+    fun checkAndCompressFiles() {
+      File(mod.recordingPath)
+        .listFiles()
+        ?.filter { it.extension == "part" }
+        ?.forEach { old ->
+          old.delete()
+        }
+
+      File("recordings_in_progress").listFiles()
+        ?.filter { it.extension == "partalrec" || it.extension == "partialrec" }
+        ?.forEach { file ->
+          println("Found uncompressed recording: $file")
+          compressRecording(file)
+        }
+    }
   }
 
   init {
     mod = this
 //    next thing you do is make a gui that shows all the recordings, can decompress and play them (put in temp folder)
-
-    File("recordings_in_progress").listFiles()?.forEach { file ->
-      println("Found uncompressed recording: $file")
-      compressRecording(file)
+    compressThread = Thread() {
+      checkAndCompressFiles()
     }
-    File(recordingPath)
-      .listFiles()
-      ?.filter { it.extension == "part" }
-      ?.forEach { old ->
-        old.delete()
-      }
+    compressThread?.start()
   }
 
   override fun onTick(
@@ -286,6 +302,15 @@ fun checkKeybinds(): Boolean {
         activeReplay?.skipBackwards(20 * 30)
         LittleTestPerformanceTrackerThing.printTimings()
         println("Skipping back 30 seconds...")
+        return true
+      }
+
+      Keyboard.KEY_Z -> {
+        // SKIP MOMENT SKIPMENT
+        LittleTestPerformanceTrackerThing.resetTimings()
+        activeReplay?.skipBackwards(20 * 60 * 10)
+        LittleTestPerformanceTrackerThing.printTimings()
+        println("Skipping back 10 minutes...")
         return true
       }
 

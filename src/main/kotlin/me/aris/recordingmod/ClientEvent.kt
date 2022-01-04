@@ -56,7 +56,7 @@ class ReplayTick(
 
   fun replayFast(ourIndex: Int, ignorePackets: HashSet<Pair<Int, Int>>) {
     // idc idk idc whatever whatever whatever it's fine this is fine not indicative of a more severe problem idc
-    mc.player.world = mc.world
+//    mc.player?.world = mc.world
 
     ReplayState.nextAbsoluteState?.runitbaby(true)
 
@@ -113,8 +113,8 @@ class ReplayTick(
     mc.entityRenderer.getMouseOver(1.0F)
 
     if (spawnedPlayer) {
-      mc.runTick()
-      println("run it baby")
+//      mc.runTick()
+//      println("run it baby")
     } else {
       // Keybindment
       val mc = mc as MinecraftAccessor
@@ -145,7 +145,6 @@ private inline fun processPacket(rawPacket: RawServerPacket) {
 //    ignored.printStackTrace()
   }
 }
-
 
 sealed class ClientEvent {
   companion object {
@@ -325,7 +324,6 @@ sealed class ClientEvent {
     private val keydownBuffer = Keyboard::class.java.getDeclaredField("keyDownBuffer")
       .apply { this.isAccessible = true }
 
-
     fun executeEvents() {
       val keydownBuffer = keydownBuffer.get(null) as ByteBuffer
       keydownBuffer.put(Keyboard.KEY_LSHIFT, if (keysDown[0]) 1 else 0)
@@ -425,7 +423,6 @@ sealed class ClientEvent {
       mc.textureManager.bindTexture(cursor)
       glDrawTexturedRect(x, y, 12.0, 12.0, 0.0, 0.0, 48.0, 48.0)
     }
-
 
     private fun getPositionsAround(partialTicks: Float): Pair<RenderedPosition, RenderedPosition> {
       var prevPos = this.mousePositions.firstOrNull()
@@ -660,7 +657,6 @@ sealed class ClientEvent {
     override fun processEvent(replayState: ReplayState) {
       replayState.nextYaw = this.yaw
       replayState.nextPitch = this.pitch
-
 
 //      activeReplay?.let { replay ->
 //        replayState.cameraRotations = ReplayState.CameraRotationsAround(

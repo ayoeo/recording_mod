@@ -8,6 +8,7 @@ import me.aris.recordingmod.PacketIDsLol.chunkDataID
 import me.aris.recordingmod.PacketIDsLol.chunkUnloadID
 import me.aris.recordingmod.PacketIDsLol.destroyEntityID
 import me.aris.recordingmod.PacketIDsLol.explosionID
+import me.aris.recordingmod.PacketIDsLol.headerFooterID
 import me.aris.recordingmod.PacketIDsLol.joinGameID
 import me.aris.recordingmod.PacketIDsLol.multiBlockChangeID
 import me.aris.recordingmod.PacketIDsLol.playerListID
@@ -20,6 +21,7 @@ import me.aris.recordingmod.PacketIDsLol.spawnObjectID
 import me.aris.recordingmod.PacketIDsLol.spawnPaintingID
 import me.aris.recordingmod.PacketIDsLol.spawnPlayerID
 import me.aris.recordingmod.PacketIDsLol.teamsID
+import me.aris.recordingmod.PacketIDsLol.updateScore
 import me.aris.recordingmod.mixins.GuiContainerCreativeAccessor
 import me.aris.recordingmod.mixins.SPacketMultiBlockChangeAccessor
 import net.minecraft.client.gui.ScaledResolution
@@ -124,7 +126,6 @@ object ReplayState {
     this.prevRotation = TimestampedRotation(yaw, pitch, now)
   }
 
-
   private fun calculateRotation(
     next: TimestampedRotation,
     prev: TimestampedRotation,
@@ -162,7 +163,6 @@ object ReplayState {
   var nextGuiState: ClientEvent.GuiState? = null
   var nextGuiStateButLikeAfterThisOneGodHelpUsAll: ClientEvent.GuiState? = null
   var currentGuiState: ClientEvent.GuiState? = null
-
 
   data class CameraRotationsAround(
     val current: CameraRotationsAtTick?,
@@ -302,18 +302,18 @@ class Replay(replayFile: File) {
           // UN AND DE
 
           // Entity despawns
-          if (rawPacket.packetID == destroyEntityID) {
-            val packet = rawPacket.cookPacket() as SPacketDestroyEntities
-            packet.entityIDs.forEach { entID ->
-              val spawnIndex = spawnedEntities[entID]
-              if (spawnIndex != null) {
-//                if (Keyboard.isKeyDown(Keyboard.KEY_P)) {
-                ignoredPacketInfo.add(spawnIndex)
-//                }
-                spawnedEntities.remove(entID)
-              }
-            }
-          }
+//          if (rawPacket.packetID == destroyEntityID) {
+//            val packet = rawPacket.cookPacket() as SPacketDestroyEntities
+//            packet.entityIDs.forEach { entID ->
+//              val spawnIndex = spawnedEntities[entID]
+//              if (spawnIndex != null) {
+////                if (Keyboard.isKeyDown(Keyboard.KEY_P)) {
+////                ignoredPacketInfo.add(spawnIndex)
+////                }
+//                spawnedEntities.remove(entID)
+//              }
+//            }
+//          }
 
           // Chunk unloads
           if (rawPacket.packetID == chunkUnloadID) {
@@ -323,15 +323,15 @@ class Replay(replayFile: File) {
             if (loadIndex != null) {
 //              ignoredPacketInfo.add(loadIndex)
               // ^^^ this breaks players and horses haha idk man help me
-              ignoredPacketInfo.add(packetProcessIndex)
+//              ignoredPacketInfo.add(packetProcessIndex)
 
               // Track ignored chunks in case we need them back
-              ignoredChunks.getOrPut(chunkCoords) {
-                mutableListOf()
-              }.add(Pair(loadIndex, packetProcessIndex))
+//              ignoredChunks.getOrPut(chunkCoords) {
+//                mutableListOf()
+//              }.add(Pair(loadIndex, packetProcessIndex))
 
               // Only remove unload chunk once!!!
-              loadedChunks.remove(chunkCoords)
+//              loadedChunks.remove(chunkCoords)
             }
 
             val changedIndices = changedBlockChunks[chunkCoords]
@@ -401,7 +401,7 @@ class Replay(replayFile: File) {
     val replayTime = measureNanoTime {
       for (i in 0 until targetTick - tickdex) {
         if (this.tickdex < this.ticks.size) {
-          this.ticks[this.tickdex].replayFast(i, ignoredPacketInfo)
+          this.ticks[this.tickdex].replayFast(i, hashSetOf()) // TODO - ignorediososfji
           this.tickdex++
         }
       }
@@ -500,9 +500,11 @@ class Replay(replayFile: File) {
         val tick = this.ticks[i]
         tick.serverPackets.filter {
           it.packetID == teamsID
+            || it.packetID == updateScore
             || it.packetID == bossBarID
             || it.packetID == scoreboardID
             || it.packetID == playerListID
+            || it.packetID == headerFooterID
           // TODO - add more stuff here if it's crashing lol
         }.forEach {
           it.cookPacket().processPacket(netHandler)
