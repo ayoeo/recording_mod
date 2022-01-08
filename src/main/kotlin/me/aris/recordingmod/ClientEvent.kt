@@ -2,8 +2,12 @@ package me.aris.recordingmod
 
 import com.mumfrey.liteloader.gl.GL.*
 import io.netty.buffer.ByteBuf
+import me.aris.recordingmod.PacketIDsLol.chunkDataID
+import me.aris.recordingmod.PacketIDsLol.spawnEXPOrbID
+import me.aris.recordingmod.PacketIDsLol.spawnGlobalID
 import me.aris.recordingmod.PacketIDsLol.spawnMobID
 import me.aris.recordingmod.PacketIDsLol.spawnObjectID
+import me.aris.recordingmod.PacketIDsLol.spawnPaintingID
 import me.aris.recordingmod.PacketIDsLol.spawnPlayerID
 import me.aris.recordingmod.mixins.*
 import net.minecraft.client.Minecraft
@@ -16,11 +20,8 @@ import net.minecraft.network.EnumConnectionState
 import net.minecraft.network.EnumPacketDirection
 import net.minecraft.network.Packet
 import net.minecraft.network.PacketBuffer
-import net.minecraft.network.play.server.SPacketSpawnMob
-import net.minecraft.network.play.server.SPacketSpawnObject
-import net.minecraft.network.play.server.SPacketSpawnPlayer
+import net.minecraft.network.play.server.*
 import net.minecraft.util.ResourceLocation
-import net.minecraft.util.math.MathHelper
 import net.minecraft.util.math.Vec3d
 import org.lwjgl.input.Keyboard
 import org.lwjgl.input.Mouse
@@ -47,63 +48,114 @@ class ReplayTick(
   fun replayFull() {
     ReplayState.nextAbsoluteState?.runitbaby(false)
 
+//    blipping = true
+//    mc.runTick()
+//    mc.world.updateEntities()
+//    blipping = false
+
     clientEvents.forEach { event ->
       event.processEvent(ReplayState)
     }
 
-    serverPackets.forEach { processPacket(it) }
+    serverPackets
+      .filter { it.packetID == chunkDataID }
+      .forEach { processPacket(it) }
+
+    serverPackets
+      .filterNot { it.packetID == chunkDataID }
+      .forEach { rawPacket ->
+        val id = when (rawPacket.packetID) {
+          spawnPlayerID -> (rawPacket.cookPacket() as SPacketSpawnPlayer).entityID
+          spawnMobID -> (rawPacket.cookPacket() as SPacketSpawnMob).entityID
+          spawnEXPOrbID -> (rawPacket.cookPacket() as SPacketSpawnExperienceOrb).entityID
+          spawnPaintingID -> (rawPacket.cookPacket() as SPacketSpawnPainting).entityID
+          spawnObjectID -> (rawPacket.cookPacket() as SPacketSpawnObject).entityID
+          spawnGlobalID -> (rawPacket.cookPacket() as SPacketSpawnGlobalEntity).entityId
+          else -> null
+        }
+
+        processPacket(rawPacket)
+
+        if (id != null) {
+          for (ent in mc.world.loadedEntityList.toList()) {
+            if (ent.isDead) {
+              val l1 = ent.chunkCoordX
+              val i2 = ent.chunkCoordZ
+
+              if (ent.addedToChunk && (mc.world as WorldAccessor).invokeIsChunkLoaded(
+                  l1,
+                  i2,
+                  true
+                )
+              ) {
+                mc.world.getChunk(l1, i2).removeEntity(ent)
+              }
+
+              mc.world.loadedEntityList.remove(ent)
+              (mc.world as WorldAccessor).invokeOnEntityRemoved(ent)
+            }
+          }
+        }
+      }
   }
 
   fun replayFast(ourIndex: Int, ignorePackets: HashSet<Pair<Int, Int>>) {
+//    mc.world.chunkProvider
     // idc idk idc whatever whatever whatever it's fine this is fine not indicative of a more severe problem idc
 //    mc.player?.world = mc.world
 
     ReplayState.nextAbsoluteState?.runitbaby(true)
 
-    fun isChunkLoaded(x: Double, z: Double) =
-      !mc.world.getChunk(MathHelper.floor(x / 16.0), MathHelper.floor(z / 16.0)).isEmpty
-
     clientEvents.forEach { event ->
       event.processEvent(ReplayState)
     }
 
-    var spawnedPlayer = false
     serverPackets.withIndex()
       .filterNot { Pair(ourIndex, it.index) in ignorePackets }
-      .forEach { (i, rawPacket) ->
-        val fixedUpPacketSoHorsesArentBad = when (rawPacket.packetID) {
-          spawnPlayerID -> (rawPacket.cookPacket() as SPacketSpawnPlayer).apply {
-            spawnedPlayer = true
-            println("spawn player?: $x, $z, $uniqueId")
-            if (!isChunkLoaded(this.x, this.z)) {
-              println("WAIT Player not spawned?: $x, $z, $uniqueId")
-              (this as SPacketSpawnPlayerAccessor).setX(mc.player.posX)
-              (this as SPacketSpawnPlayerAccessor).setY(-500.0)
-              (this as SPacketSpawnPlayerAccessor).setZ(mc.player.posZ)
-            }
+      .filter { it.value.packetID == chunkDataID }
+      .forEach {
+        processPacket(it.value)
+      }
+
+
+    serverPackets.withIndex()
+      .filterNot { Pair(ourIndex, it.index) in ignorePackets }
+      .filterNot { it.value.packetID == chunkDataID }
+      .forEach { (_, rawPacket) ->
+        val chunkCoords = when (rawPacket.packetID) {
+          spawnPlayerID -> (rawPacket.cookPacket() as SPacketSpawnPlayer).let { Pair(it.x, it.z) }
+          spawnMobID -> (rawPacket.cookPacket() as SPacketSpawnMob).let { Pair(it.x, it.z) }
+          spawnEXPOrbID -> (rawPacket.cookPacket() as SPacketSpawnExperienceOrb).let {
+            Pair(
+              it.x,
+              it.z
+            )
           }
-          spawnMobID -> (rawPacket.cookPacket() as SPacketSpawnMob).apply {
-            if (!isChunkLoaded(this.x, this.z)) {
-              (this as SPacketSpawnMobAccessor).setX(mc.player.posX)
-              (this as SPacketSpawnMobAccessor).setY(-500.0)
-              (this as SPacketSpawnMobAccessor).setZ(mc.player.posZ)
-            }
+          spawnPaintingID -> (rawPacket.cookPacket() as SPacketSpawnPainting).let {
+            Pair(
+              it.position.x.toDouble(),
+              it.position.z.toDouble()
+            )
           }
-          spawnObjectID -> (rawPacket.cookPacket() as SPacketSpawnObject).apply {
-            if (!isChunkLoaded(this.x, this.z)) {
-              (this as SPacketSpawnObjectAccessor).setX(mc.player.posX)
-              (this as SPacketSpawnObjectAccessor).setY(-500.0)
-              (this as SPacketSpawnObjectAccessor).setZ(mc.player.posZ)
-            }
+          spawnObjectID -> (rawPacket.cookPacket() as SPacketSpawnObject).let { Pair(it.x, it.z) }
+          spawnGlobalID -> (rawPacket.cookPacket() as SPacketSpawnGlobalEntity).let {
+            Pair(
+              it.x,
+              it.z
+            )
           }
           else -> null
         }
-
-        if (fixedUpPacketSoHorsesArentBad != null) {
-          fixedUpPacketSoHorsesArentBad.processPacket(activeReplay!!.netHandler)
-        } else {
-          processPacket(rawPacket)
+        if (chunkCoords != null) {
+          blipping = true
+          mc.runTick()
+//          mc.world.loadedEntityList.forEach {
+//            it.onEntityUpdate()
+//          }
+//          mc.world.updateEntities()
+          blipping = false
         }
+        processPacket(rawPacket)
       }
 
     // haha forgot this haha
@@ -112,26 +164,16 @@ class ReplayTick(
 
     mc.entityRenderer.getMouseOver(1.0F)
 
-    if (spawnedPlayer) {
-//      mc.runTick()
-//      println("run it baby")
-    } else {
-      // Keybindment
-      val mc = mc as MinecraftAccessor
-      if (mc.leftClickCounter > 0) {
-        --mc.leftClickCounter
-      }
-      if (mc.rightClickDelayTimer > 0) {
-        --mc.rightClickDelayTimer
-      }
-      mc.invokeProcessKeyBinds()
-    }
+    // Keybindment
+    val mc = mc as MinecraftAccessor
 
-    // TODO - something player spawn something?
-    // TODO - chunk loading maybe, like it's not done yet? the chunk needs to be loaded first???
-    // TODO - chunk loading maybe, like it's not done yet? the chunk needs to be loaded first???
-    // TODO - chunk loading maybe, like it's not done yet? the chunk needs to be loaded first???
-    // TODO - chunk loading maybe, like it's not done yet? the chunk needs to be loaded first???
+    if (mc.leftClickCounter > 0) {
+      --mc.leftClickCounter
+    }
+    if (mc.rightClickDelayTimer > 0) {
+      --mc.rightClickDelayTimer
+    }
+    mc.invokeProcessKeyBinds()
   }
 }
 
@@ -343,11 +385,11 @@ sealed class ClientEvent {
           val (x, y) = pos.getScaledXY()
           Mouse.setGrabbed(true)
           Mouse.setCursorPosition(x, y)
-          val scaledresolution = ScaledResolution(mc);
-          val i1 = scaledresolution.scaledWidth;
-          val j1 = scaledresolution.scaledHeight;
-          val xlmao = Mouse.getX() * i1 / mc.displayWidth;
-          val ylmao = j1 - Mouse.getY() * j1 / mc.displayHeight - 1;
+          val scaledresolution = ScaledResolution(mc)
+          val i1 = scaledresolution.scaledWidth
+          val j1 = scaledresolution.scaledHeight
+          val xlmao = Mouse.getX() * i1 / mc.displayWidth
+          val ylmao = j1 - Mouse.getY() * j1 / mc.displayHeight - 1
           val currentScreen = mc.currentScreen
           if (currentScreen is GuiContainer) {
             currentScreen.inventorySlots.inventorySlots.forEach { slot ->
@@ -381,11 +423,11 @@ sealed class ClientEvent {
       v2: Double
     ) {
       glDisableDepthTest()
-      glDisableLighting();
-      glDisableBlend();
-      glAlphaFunc(GL_GREATER, 0.01F);
-      glEnableTexture2D();
-      glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
+      glDisableLighting()
+      glDisableBlend()
+      glAlphaFunc(GL_GREATER, 0.01F)
+      glEnableTexture2D()
+      glColor4f(1.0F, 1.0F, 1.0F, 1.0F)
       GlStateManager.enableBlend()
       GlStateManager.tryBlendFuncSeparate(
         GlStateManager.SourceFactor.SRC_ALPHA,

@@ -27,6 +27,7 @@
     "SPacketSpawnObjectAccessor",
     "SPacketSpawnPlayerAccessor",
     "TimerAccessor",
-    "TimerMixin"
+    "TimerMixin",
+    "WorldAccessor"
   ]
 }

@@ -263,6 +263,7 @@ class LiteModRecordingMod : LiteMod, Tickable, Configurable {
 }
 
 var skipping = false
+var blipping = false
 var paused = false
 fun checkKeybinds(): Boolean {
   val keys = mutableListOf<Int>()
@@ -361,8 +362,8 @@ fun checkKeybinds(): Boolean {
       Keyboard.KEY_O -> {
         // SKIP MOMENT SKIPMENT
         LittleTestPerformanceTrackerThing.resetTimings()
-        activeReplay?.skipTo(490) // 162
 //        activeReplay?.restart()
+        activeReplay?.skipTo(234183) // 162
         LittleTestPerformanceTrackerThing.printTimings()
         println("SKIPPING TO THAT ONE PLACE YOU LIKE")
         return true
@@ -379,9 +380,10 @@ fun preGameLoop(): Boolean {
   // This also wipes keybinds to remove player interaction from the game
 
   // MOUSE WILL NOT BE
-  @Suppress("ControlFlowWithEmptyBody") while (Mouse.next())
+  @Suppress("ControlFlowWithEmptyBody") while (Mouse.next()) {
     Mouse.getDX()
-  Mouse.getDY()
+    Mouse.getDY()
+  }
   // TODO - let mouse back for gui? hahahah
   // MOUSE WILL NOT BE
 
@@ -411,7 +413,7 @@ fun preTick(): Boolean {
     return true
   }
 
-//  if (skipping) return false
+  if (blipping) return false
   activeReplay?.playNextTick()
 
   // TODO - put this back lol

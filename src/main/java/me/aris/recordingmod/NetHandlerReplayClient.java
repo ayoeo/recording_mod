@@ -538,6 +538,7 @@ public class NetHandlerReplayClient extends NetHandlerPlayClient {
 //    PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.client);
 
     if (packetIn.isFullChunk()) {
+      System.out.println("Loading chunk: " + packetIn.getChunkX() + ", " + packetIn.getChunkZ());
       this.world.doPreChunk(packetIn.getChunkX(), packetIn.getChunkZ(), true);
     }
 

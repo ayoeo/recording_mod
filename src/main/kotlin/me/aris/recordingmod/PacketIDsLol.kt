@@ -16,19 +16,25 @@ object PacketIDsLol {
       EnumPacketDirection.CLIENTBOUND,
       SPacketTeams()
     )
-  
-  val scoreboardID =
+
+  val scoreboardObjective =
     EnumConnectionState.PLAY.getPacketId(
       EnumPacketDirection.CLIENTBOUND,
       SPacketScoreboardObjective()
     )
   
+  val displayObjective =
+    EnumConnectionState.PLAY.getPacketId(
+      EnumPacketDirection.CLIENTBOUND,
+      SPacketDisplayObjective()
+    )
+
   val updateScore =
     EnumConnectionState.PLAY.getPacketId(
       EnumPacketDirection.CLIENTBOUND,
       SPacketUpdateScore()
     )
-  
+
   val bossBarID =
     EnumConnectionState.PLAY.getPacketId(
       EnumPacketDirection.CLIENTBOUND,
@@ -39,7 +45,7 @@ object PacketIDsLol {
       EnumPacketDirection.CLIENTBOUND,
       SPacketPlayerListItem()
     )
-  
+
   val headerFooterID =
     EnumConnectionState.PLAY.getPacketId(
       EnumPacketDirection.CLIENTBOUND,
