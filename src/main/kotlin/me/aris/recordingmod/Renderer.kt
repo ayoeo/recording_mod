@@ -53,7 +53,7 @@ class MappedBuffer(bufferSize: Long) {
       null
     )
   }
-  
+
   fun bindBufferBase(index: Int) {
     GL30.glBindBufferBase(GL43.GL_SHADER_STORAGE_BUFFER, index, this.name)
   }
@@ -185,8 +185,13 @@ val convertProgram = run {
 object Renderer {
   init {
 //    val dll = File("librecording_mod_native.so")
-    val dll = File("recording_mod_native.dll")
-    System.load(dll.absolutePath)
+    val os = System.getProperty("os.name").toLowerCase()
+    if (os.contains("windows")) {
+      val dll = File("recording_mod_native.dll")
+      System.load(dll.absolutePath)
+    } else {
+      // idk mac stuff do later lol
+    }
   }
 
   // TODO - set these with keybinds
@@ -272,6 +277,16 @@ object Renderer {
     state.yuvBuffers.makeFence()
     //-------------------Compute shader stuff-------------------//
 
+    // TODO - prevent resizing really tho hhahahahahaheheah
+    // TODO - prevent resizing really tho hhahahahahaheheah
+    // TODO - prevent resizing really tho hhahahahahaheheah
+    // TODO - prevent resizing really tho hhahahahahaheheah
+    // TODO - prevent resizing really tho hhahahahahaheheah
+    // TODO - prevent resizing really tho hhahahahahaheheah
+    // TODO - prevent resizing really tho hhahahahahaheheah
+    // TODO - prevent resizing really tho hhahahahahaheheah
+    // TODO - prevent resizing really tho hhahahahahaheheah
+    // TODO - prevent resizing really tho hhahahahahaheheah
     // TODO - prevent resizing really tho hhahahahahaheheah
     // TODO - prevent resizing really tho hhahahahahaheheah
     // TODO - prevent resizing really tho hhahahahahaheheah

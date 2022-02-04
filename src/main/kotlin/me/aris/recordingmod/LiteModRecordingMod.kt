@@ -2,7 +2,6 @@ package me.aris.recordingmod
 
 import com.google.gson.annotations.Expose
 import com.google.gson.annotations.SerializedName
-import com.mumfrey.liteloader.Configurable
 import com.mumfrey.liteloader.LiteMod
 import com.mumfrey.liteloader.Tickable
 import com.mumfrey.liteloader.core.LiteLoader
@@ -20,16 +19,18 @@ import me.aris.recordingmod.mixins.TimerAccessor
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.*
 import net.minecraft.client.settings.KeyBinding
+import org.apache.commons.io.comparator.LastModifiedFileComparator
 import org.lwjgl.input.Keyboard
 import org.lwjgl.input.Mouse
 import java.io.File
+import java.nio.charset.Charset
 
 val mc: Minecraft
   get() = Minecraft.getMinecraft()
 
 var activeReplay: Replay? = null
 
-class RecordingEntry(index: Int, name: String) : GuiListExtended.IGuiListEntry {
+class RecordingEntry(val index: Int, val name: String) : GuiListExtended.IGuiListEntry {
   override fun updatePosition(slotIndex: Int, x: Int, y: Int, partialTicks: Float) {
 //    TODO("Not yet implemented")
   }
@@ -45,14 +46,89 @@ class RecordingEntry(index: Int, name: String) : GuiListExtended.IGuiListEntry {
     isSelected: Boolean,
     partialTicks: Float
   ) {
-    Gui.drawRect(x, y, x + 32, y + 10, -1601138544)
-//    TODO("Not yet implemented")
+    Gui.drawRect(x, y, x + listWidth, y + slotHeight, 0xFF000000.toInt())
+    Gui.drawRect(
+      x + 1,
+      y + 1,
+      x + listWidth - 1,
+      y + slotHeight - 1,
+      if (isSelected) 0xFF666666.toInt() else 0xFF888888.toInt()
+    )
+
+    mc.fontRenderer.drawString(
+      name,
+      x + listWidth / 2 - mc.fontRenderer.getStringWidth(name) / 2,
+      y + 2,
+      0
+    )
   }
 
   override fun mousePressed(
     slotIndex: Int, mouseX: Int, mouseY: Int, mouseEvent: Int, relativeX: Int, relativeY: Int
   ): Boolean {
+    return true
+  }
+
+  override fun mouseReleased(
+    slotIndex: Int, x: Int, y: Int, mouseEvent: Int, relativeX: Int, relativeY: Int
+  ) {
 //    TODO("Not yet implemented")
+  }
+}
+
+class MarkerEntry(
+  val index: Int,
+  val markerName: String,
+  val recordingName: String,
+  val tickdex: Int
+) :
+  GuiListExtended.IGuiListEntry {
+  override fun updatePosition(slotIndex: Int, x: Int, y: Int, partialTicks: Float) {
+//    TODO("Not yet implemented")
+  }
+
+  override fun drawEntry(
+    slotIndex: Int,
+    x: Int,
+    y: Int,
+    listWidth: Int,
+    slotHeight: Int,
+    mouseX: Int,
+    mouseY: Int,
+    isSelected: Boolean,
+    partialTicks: Float
+  ) {
+    Gui.drawRect(x, y, x + listWidth, y + slotHeight, 0xFF000000.toInt())
+    Gui.drawRect(
+      x + 1,
+      y + 1,
+      x + listWidth - 1,
+      y + slotHeight - 1,
+      if (isSelected) 0xFF666666.toInt() else 0xFF888888.toInt()
+    )
+
+    var displayName = this.markerName
+    while (mc.fontRenderer.getStringWidth(displayName) >= listWidth - 10) {
+      displayName = displayName.dropLast(1)
+    }
+    val indexText = "${index + 1}:"
+    mc.fontRenderer.drawString(
+      indexText,
+      x - 4 - mc.fontRenderer.getStringWidth(indexText),
+      y + 2,
+      0xDDDDDD
+    )
+    mc.fontRenderer.drawString(
+      displayName,
+      x + listWidth / 2 - mc.fontRenderer.getStringWidth(displayName) / 2,
+      y + 2,
+      0
+    )
+  }
+
+  override fun mousePressed(
+    slotIndex: Int, mouseX: Int, mouseY: Int, mouseEvent: Int, relativeX: Int, relativeY: Int
+  ): Boolean {
     return true
   }
 
@@ -131,12 +207,98 @@ class MarkItGui : GuiScreen() {
 }
 //Not to be confused with market gui 
 
+class MarkerList(
+  width: Int,
+  height: Int
+) : GuiListExtended(mc, width, height, 24, height - 24, 16) {
+  val selected: Int? = null
+  private val markers = mutableListOf<MarkerEntry>()
+
+  override fun getListWidth(): Int {
+    return 150
+  }
+
+  init {
+    File("markers")
+      .listFiles()
+      ?.sortedWith(LastModifiedFileComparator())
+      ?.withIndex()?.forEach { (i, file) ->
+        val name = file.nameWithoutExtension
+        val split = name.split('-')
+        val markerName = split.first()
+        val recordingName = split.last()
+        this.markers.add(
+          MarkerEntry(
+            i,
+            markerName,
+            recordingName,
+            file.readText(Charset.defaultCharset()).toInt()
+          )
+        )
+      }
+  }
+
+  override fun elementClicked(
+    index: Int,
+    p_elementClicked_2_: Boolean,
+    p_elementClicked_3_: Int,
+    p_elementClicked_4_: Int
+  ) {
+//    println("element clicked: $index $p_elementClicked_2_ $p_elementClicked_3_ $p_elementClicked_4_")
+    // TODO - set last played index to 'index' and then it will be a different color which we CAN USE TO TELL WHERE WE ARE HAHA
+    val name = this.markers[index].recordingName
+    val tickdex = this.markers[index].tickdex
+    println("uncompressing $name")
+    val recFile = File(mod.recordingPath, "$name.rec")
+
+    // clean it up now
+    val f = File(System.getProperty("java.io.tmpdir"), "uncompressed_recordings")
+    f.mkdirs()
+
+    val uncompressedRecording = File(f, name)
+    if (!uncompressedRecording.exists()) {
+      f.listFiles()?.forEach { it.delete() }
+//      val os = System.getProperty("os.name").toLowerCase()
+      val exename = "\"${File(mod.sevenZipPath).absolutePath}\""
+
+      val proc = Runtime.getRuntime()
+        .exec(
+          "$exename x \"${recFile.absolutePath}\"",
+          arrayOf(),
+          f
+        )
+      proc.waitFor()
+    } else {
+      println("Recording was already uncompressed we're good")
+    }
+    println("playing $name")
+    mc.displayGuiScreen(GuiDownloadTerrain())
+    activeReplay = Replay(File(f, name))
+    activeReplay?.restart()
+    activeReplay?.skipTo(tickdex)
+    paused = false
+//    println("clicked on $n")
+  }
+
+  override fun getSize(): Int {
+    return this.markers.size
+  }
+
+  override fun getListEntry(index: Int): GuiListExtended.IGuiListEntry {
+    return this.markers[index]
+  }
+}
+
 class RecordingsList(
   width: Int,
   height: Int
-) : GuiListExtended(mc, width, height, 32, height - 64, 12) {
+) : GuiListExtended(mc, width, height, 24, height - 24, 16) {
   val selected: Int? = null
   private val recordings = mutableListOf<RecordingEntry>()
+
+  override fun getListWidth(): Int {
+    return 150
+  }
 
   init {
     File(mod.recordingPath)
@@ -147,20 +309,56 @@ class RecordingsList(
       }
   }
 
-  override fun drawScreen(mouseXIn: Int, mouseYIn: Int, partialTicks: Float) {
-    super.drawScreen(mouseXIn, mouseYIn, partialTicks)
+  override fun elementClicked(
+    index: Int,
+    p_elementClicked_2_: Boolean,
+    p_elementClicked_3_: Int,
+    p_elementClicked_4_: Int
+  ) {
+//    println("element clicked: $index $p_elementClicked_2_ $p_elementClicked_3_ $p_elementClicked_4_")
+    // TODO - set last played index to 'index' and then it will be a different color which we CAN USE TO TELL WHERE WE ARE HAHA
+    val name = this.recordings[index].name
+    println("uncompressing $name")
+    val recFile = File(mod.recordingPath, "$name.rec")
+
+    // clean it up now
+    val f = File(System.getProperty("java.io.tmpdir"), "uncompressed_recordings")
+    f.mkdirs()
+
+    val uncompressedRecording = File(f, name)
+    if (!uncompressedRecording.exists()) {
+      f.listFiles()?.forEach { it.delete() }
+//      val os = System.getProperty("os.name").toLowerCase()
+      val exename = "\"${File(mod.sevenZipPath).absolutePath}\""
+
+      val proc = Runtime.getRuntime()
+        .exec(
+          "$exename x \"${recFile.absolutePath}\"",
+          arrayOf(),
+          f
+        )
+      proc.waitFor()
+    } else {
+      println("Recording was already uncompressed we're good")
+    }
+    println("playing $name")
+    mc.displayGuiScreen(GuiDownloadTerrain())
+    activeReplay = Replay(File(f, name))
+    activeReplay?.restart()
+    paused = false
+//    println("clicked on $n")
   }
 
   override fun getSize(): Int {
     return this.recordings.size
   }
 
-  override fun getListEntry(index: Int): IGuiListEntry {
+  override fun getListEntry(index: Int): GuiListExtended.IGuiListEntry {
     return this.recordings[index]
   }
 }
 
-class RecordingGui : GuiScreen() {
+object RecordingGui : GuiScreen() {
   private lateinit var recordingsList: RecordingsList
 
   override fun initGui() {
@@ -177,12 +375,6 @@ class RecordingGui : GuiScreen() {
     super.drawScreen(mouseX, mouseY, partialTicks)
   }
 
-  //  upda
-//  override fun handleKeyboardInput() {
-//    this.recordingsList.key()
-//    super.handleKeyboardInput()
-//  }
-
   override fun keyTyped(typedChar: Char, keyCode: Int) {
     val i = this.recordingsList.selected
     val entry = i?.let { this.recordingsList.getListEntry(it) }
@@ -195,13 +387,46 @@ class RecordingGui : GuiScreen() {
   }
 }
 
+object MarkerGui : GuiScreen() {
+  private lateinit var markerList: MarkerList
+
+  override fun initGui() {
+    val scaledRes = ScaledResolution(Minecraft.getMinecraft())
+    markerList = MarkerList(
+      scaledRes.scaledWidth,
+      scaledRes.scaledHeight
+    )
+  }
+
+  override fun drawScreen(mouseX: Int, mouseY: Int, partialTicks: Float) {
+    this.drawDefaultBackground()
+    markerList.drawScreen(mouseX, mouseY, partialTicks)
+    super.drawScreen(mouseX, mouseY, partialTicks)
+  }
+
+  override fun keyTyped(typedChar: Char, keyCode: Int) {
+    val i = this.markerList.selected
+    val entry = i?.let { this.markerList.getListEntry(it) }
+    super.keyTyped(typedChar, keyCode)
+  }
+
+  override fun handleMouseInput() {
+    this.markerList.handleMouseInput()
+    super.handleMouseInput()
+  }
+}
+
 @ExposableOptions(
   strategy = ConfigStrategy.Unversioned, filename = "recording_mod.json", aggressive = true
 )
-class LiteModRecordingMod : LiteMod, Tickable, Configurable {
+class LiteModRecordingMod : LiteMod, Tickable, com.mumfrey.liteloader.Configurable {
   @Expose
   @SerializedName("recording_path")
   var recordingPath = "recordings"
+
+  @Expose
+  @SerializedName("seven_zip_path")
+  var sevenZipPath = "C:/Program Files/7-Zip"
 
   val codeFast = KeyBinding("codecodecodefast", Keyboard.KEY_L, "recording");
 
@@ -219,7 +444,7 @@ class LiteModRecordingMod : LiteMod, Tickable, Configurable {
         }
 
       File("recordings_in_progress").listFiles()
-        ?.filter { it.extension == "partalrec" || it.extension == "partialrec" }
+        ?.filter { it.extension != "wav" }
         ?.forEach { file ->
           println("Found uncompressed recording: $file")
           compressRecording(file)
@@ -229,11 +454,7 @@ class LiteModRecordingMod : LiteMod, Tickable, Configurable {
 
   init {
     mod = this
-//    next thing you do is make a gui that shows all the recordings, can decompress and play them (put in temp folder)
-    compressThread = Thread() {
-      checkAndCompressFiles()
-    }
-    compressThread?.start()
+
   }
 
   override fun onTick(
@@ -255,6 +476,16 @@ class LiteModRecordingMod : LiteMod, Tickable, Configurable {
 
   override fun init(configPath: File?) {
     LiteLoader.getInput().registerKeyBinding(this.codeFast)
+
+    val f = File(System.getProperty("java.io.tmpdir"), "uncompressed_recordings")
+    f.mkdirs()
+    f.deleteRecursively()
+
+//    next thing you do is make a gui that shows all the recordings, can decompress and play them (put in temp folder)
+    compressThread = Thread() {
+      checkAndCompressFiles()
+    }
+    compressThread?.start()
   }
 
   override fun getConfigPanelClass(): Class<out ConfigPanel> {
@@ -354,6 +585,7 @@ fun checkKeybinds(): Boolean {
         // SKIP MOMENT SKIPMENT
         LittleTestPerformanceTrackerThing.resetTimings()
         activeReplay?.skipForward(20 * 2)
+        println("we're at $tickdex")
         LittleTestPerformanceTrackerThing.printTimings()
         println("Skipping 10 seconds...")
         return true
@@ -363,10 +595,32 @@ fun checkKeybinds(): Boolean {
         // SKIP MOMENT SKIPMENT
         LittleTestPerformanceTrackerThing.resetTimings()
 //        activeReplay?.restart()
-        activeReplay?.skipTo(234183) // 162
+//        activeReplay?.skipTo(149706) // 162 // breaks chunk stuff - 1_16_08_16_56
+
+//        activeReplay?.skipTo(180600) //   01_11_00_10_01 hla helmet horse weird thing
+        activeReplay?.skipTo(67832) //   t2 fight haha 12_17_20_47_39
+//        activeReplay?.skipTo(236000) //   01_04_04_50_58 hla riph stronghold avalon
+//        activeReplay?.skipTo(67794) // 162  idk maybe broken players?? (THICKMENT THICK SO THICK)
+//        activeReplay?.skipTo(334893) // 162  idk maybe broken players??
+//        activeReplay?.skipTo(125420) // 162 // breaks chunk stuff (THICKMENT THICKMENT SO THICK)
+//        activeReplay?.skipTo(367287) // 162 // thickment
         LittleTestPerformanceTrackerThing.printTimings()
         println("SKIPPING TO THAT ONE PLACE YOU LIKE")
         return true
+      }
+
+      Keyboard.KEY_P -> {
+        mc.loadWorld(null)
+        activeReplay = null
+        ReplayState.currentGuiState = null
+        ReplayState.nextGuiState = null
+        ReplayState.nextAbsoluteState = null
+        ReplayState.nextGuiProcessState = null
+        ReplayState.wasOnHorse = false
+        ReplayState.nextKeybindingState = ClientEvent.trackedKeybinds.map {
+          Pair(false, 0)
+        }
+        mc.displayGuiScreen(RecordingGui)
       }
     }
   }
@@ -407,6 +661,10 @@ fun preGameLoop(): Boolean {
 fun preTick(): Boolean {
   if (activeReplay?.reachedEnd() == true) {
     return false
+  }
+
+  if (mc.currentScreen is RecordingGui) {
+    return true
   }
 
   if (paused) {

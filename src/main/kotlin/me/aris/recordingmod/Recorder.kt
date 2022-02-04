@@ -2,22 +2,17 @@ package me.aris.recordingmod
 
 import io.netty.buffer.ByteBuf
 import io.netty.buffer.Unpooled
-import me.aris.recordingmod.Recorder.recording
-import me.aris.recordingmod.Recorder.recordingFile
-import me.aris.recordingmod.Recorder.tickdex
-import me.aris.recordingmod.Recorder.toWritelater
+import me.aris.recordingmod.LiteModRecordingMod.Companion.mod
 import me.aris.recordingmod.Recorder.writeLaterLock
 import me.aris.recordingmod.mixins.GuiScreenAccessor
 import net.minecraft.client.gui.ScaledResolution
 import net.minecraft.network.PacketBuffer
-import org.apache.commons.compress.archivers.sevenz.SevenZOutputFile
 import org.lwjgl.input.Mouse
 import sun.awt.Mutex
 import java.io.BufferedOutputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
-import java.nio.file.Files
 import java.text.SimpleDateFormat
 import java.util.*
 import javax.sound.sampled.*
@@ -82,7 +77,7 @@ sealed class GuiInputEvent {
     }
 
     override fun process() {
-      println("Keypress: $keyCode") // TODO - force keybinds to be the same as they wereeeeee
+//      println("Keypress: $keyCode") // TODO - force keybinds to be the same as they wereeeeee
       // TODO - test this by changing inventory keybind
       (mc.currentScreen as GuiScreenAccessor?)?.invokeKeyTyped(typedChar, keyCode)
     }
@@ -405,18 +400,46 @@ object Recorder {
       recordingFile.renameTo(newRecordingFile)
       val micfile =
         File("recordings_in_progress", "mic-${recordingFile.nameWithoutExtension}.wav")
-      val proc = Runtime.getRuntime()
-        .exec(
-          "7z.exe a -t7z -sdel \"${
-            File(
-              File(LiteModRecordingMod.mod.recordingPath).absolutePath,
-              newRecordingFile.nameWithoutExtension
-            )
-          }.rec\" \"${newRecordingFile.name}\" \"${micfile.name}\"",
-          arrayOf(),
-          File("recordings_in_progress")
-        )
+      val os = System.getProperty("os.name").toLowerCase()
+//      if (os.contains("windows")) {
+      val exename = "\"${File(mod.sevenZipPath).absolutePath}\""
+      val pbuilder = ProcessBuilder(
+        "$exename a -t7z -sdel \"${
+          File(
+            File(LiteModRecordingMod.mod.recordingPath).absolutePath,
+            newRecordingFile.nameWithoutExtension
+          )
+        }.rec\" \"${newRecordingFile.name}\" \"${micfile.name}\""
+      )
+      pbuilder.directory(File("recordings_in_progress"))
+      pbuilder.redirectOutput()
+      pbuilder.redirectError()
+      val proc = pbuilder.start()
       proc.waitFor()
+//      } else {
+//        val pbuilder = ProcessBuilder(
+//          "bash -l -c '7za a -t7z -sdel \"${
+//            File(
+//              File(LiteModRecordingMod.mod.recordingPath).absolutePath,
+//              newRecordingFile.nameWithoutExtension
+//            )
+//          }.rec\" \"${newRecordingFile.name}\" \"${micfile.name}\"'"
+//        )
+//        pbuilder.directory(File("recordings_in_progress"))
+//        pbuilder.redirectOutput()
+//        pbuilder.redirectError()
+//        val proc = pbuilder.start()
+//        proc.waitFor()
+//      }
+
+//      val haha = "$exename a -t7z -sdel \"${
+//        File(
+//          File(LiteModRecordingMod.mod.recordingPath).absolutePath,
+//          newRecordingFile.nameWithoutExtension
+//        )
+//      }.rec\" \"${newRecordingFile.name}\" \"${micfile.name}\""
+//      println("oh haha: $haha")
+//      proc.waitFor()
 
       // deletingg..
 //      newRecordingFile.delete()

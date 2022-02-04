@@ -3,6 +3,9 @@ package me.aris.recordingmod
 import com.mumfrey.liteloader.gl.GL.*
 import io.netty.buffer.ByteBuf
 import me.aris.recordingmod.PacketIDsLol.chunkDataID
+import me.aris.recordingmod.PacketIDsLol.destroyEntityID
+import me.aris.recordingmod.PacketIDsLol.entityEquipment
+import me.aris.recordingmod.PacketIDsLol.entityMetadata
 import me.aris.recordingmod.PacketIDsLol.spawnEXPOrbID
 import me.aris.recordingmod.PacketIDsLol.spawnGlobalID
 import me.aris.recordingmod.PacketIDsLol.spawnMobID
@@ -46,6 +49,8 @@ class ReplayTick(
   val serverPackets: List<RawServerPacket>
 ) {
   fun replayFull() {
+    mc.player?.world = mc.world
+
     ReplayState.nextAbsoluteState?.runitbaby(false)
 
 //    blipping = true
@@ -57,12 +62,12 @@ class ReplayTick(
       event.processEvent(ReplayState)
     }
 
-    serverPackets
-      .filter { it.packetID == chunkDataID }
-      .forEach { processPacket(it) }
+//    serverPackets
+//      .filterNot { isEntityThing(it) }
+//      .forEach { processPacket(it) }
 
     serverPackets
-      .filterNot { it.packetID == chunkDataID }
+//      .filter { isEntityThing(it) }
       .forEach { rawPacket ->
         val id = when (rawPacket.packetID) {
           spawnPlayerID -> (rawPacket.cookPacket() as SPacketSpawnPlayer).entityID
@@ -96,13 +101,24 @@ class ReplayTick(
             }
           }
         }
+
       }
   }
+
+  fun isEntityThing(rawPacket: RawServerPacket) =
+    rawPacket.packetID == spawnPlayerID ||
+      rawPacket.packetID == spawnMobID ||
+      rawPacket.packetID == spawnEXPOrbID ||
+      rawPacket.packetID == spawnObjectID ||
+      rawPacket.packetID == spawnGlobalID ||
+      rawPacket.packetID == destroyEntityID ||
+      rawPacket.packetID == entityMetadata ||
+      rawPacket.packetID == entityEquipment
 
   fun replayFast(ourIndex: Int, ignorePackets: HashSet<Pair<Int, Int>>) {
 //    mc.world.chunkProvider
     // idc idk idc whatever whatever whatever it's fine this is fine not indicative of a more severe problem idc
-//    mc.player?.world = mc.world
+    mc.player?.world = mc.world
 
     ReplayState.nextAbsoluteState?.runitbaby(true)
 
@@ -110,17 +126,14 @@ class ReplayTick(
       event.processEvent(ReplayState)
     }
 
-    serverPackets.withIndex()
-      .filterNot { Pair(ourIndex, it.index) in ignorePackets }
-      .filter { it.value.packetID == chunkDataID }
-      .forEach {
-        processPacket(it.value)
-      }
-
+//    serverPackets.withIndex()
+//      .filterNot { Pair(ourIndex, it.index) in ignorePackets }
+//      .filterNot { isEntityThing(it.value) }
+//      .forEach { processPacket(it.value) }
 
     serverPackets.withIndex()
       .filterNot { Pair(ourIndex, it.index) in ignorePackets }
-      .filterNot { it.value.packetID == chunkDataID }
+//      .filter { isEntityThing(it.value) }
       .forEach { (_, rawPacket) ->
         val chunkCoords = when (rawPacket.packetID) {
           spawnPlayerID -> (rawPacket.cookPacket() as SPacketSpawnPlayer).let { Pair(it.x, it.z) }
@@ -157,6 +170,51 @@ class ReplayTick(
         }
         processPacket(rawPacket)
       }
+//    serverPackets.withIndex()
+////      .filter { it.value.packetID == chunkDataID }
+//      .forEach {
+//        processPacket(it.value)
+//      }
+
+//    serverPackets.withIndex()
+////      .filterNot { Pair(ourIndex, it.index) in ignorePackets }
+////      .filterNot { it.value.packetID == chunkDataID }
+//      .forEach { (_, rawPacket) ->
+//        val chunkCoords = when (rawPacket.packetID) {
+//          spawnPlayerID -> (rawPacket.cookPacket() as SPacketSpawnPlayer).let { Pair(it.x, it.z) }
+//          spawnMobID -> (rawPacket.cookPacket() as SPacketSpawnMob).let { Pair(it.x, it.z) }
+//          spawnEXPOrbID -> (rawPacket.cookPacket() as SPacketSpawnExperienceOrb).let {
+//            Pair(
+//              it.x,
+//              it.z
+//            )
+//          }
+//          spawnPaintingID -> (rawPacket.cookPacket() as SPacketSpawnPainting).let {
+//            Pair(
+//              it.position.x.toDouble(),
+//              it.position.z.toDouble()
+//            )
+//          }
+//          spawnObjectID -> (rawPacket.cookPacket() as SPacketSpawnObject).let { Pair(it.x, it.z) }
+//          spawnGlobalID -> (rawPacket.cookPacket() as SPacketSpawnGlobalEntity).let {
+//            Pair(
+//              it.x,
+//              it.z
+//            )
+//          }
+//          else -> null
+//        }
+//        if (chunkCoords != null) {
+//          blipping = true
+//          mc.runTick()
+////          mc.world.loadedEntityList.forEach {
+////            it.onEntityUpdate()
+////          }
+////          mc.world.updateEntities()
+//          blipping = false
+//        }
+//        processPacket(rawPacket)
+//      }
 
     // haha forgot this haha
     mc.player?.rotationYaw = ReplayState.nextYaw
@@ -177,7 +235,7 @@ class ReplayTick(
   }
 }
 
-private inline fun processPacket(rawPacket: RawServerPacket) {
+inline fun processPacket(rawPacket: RawServerPacket) {
 //  LittleTestPerformanceTrackerThing.timePacket(rawPacket.cookPacket())
   // TODO - don't time packet, use below
   try {
@@ -385,6 +443,7 @@ sealed class ClientEvent {
           val (x, y) = pos.getScaledXY()
           Mouse.setGrabbed(true)
           Mouse.setCursorPosition(x, y)
+          Mouse.setGrabbed(false)
           val scaledresolution = ScaledResolution(mc)
           val i1 = scaledresolution.scaledWidth
           val j1 = scaledresolution.scaledHeight
@@ -549,7 +608,7 @@ sealed class ClientEvent {
     private var isSprinting = false
     private var itemInUseCount = 0
 
-    private var ridingID = 0
+    var ridingID = 0
     private var ridingYaw = 0f
     private var ridingPitch = 0f
     private var ridingRearing = false

@@ -6,6 +6,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.EntityPlayerSP;
 import net.minecraft.client.gui.*;
 import net.minecraft.client.settings.GameSettings;
+import net.minecraft.util.MouseHelper;
 import org.lwjgl.input.Keyboard;
 import org.lwjgl.input.Mouse;
 import org.lwjgl.opengl.Display;
@@ -13,6 +14,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
@@ -102,7 +104,7 @@ abstract class MinecraftMixin {
       if (guiScreenIn == null) {
         ClientEvent.writeClientEvent(ClientEvent.CloseScreen.INSTANCE);
       }
-     
+
       if ((guiScreenIn instanceof GuiMainMenu || guiScreenIn instanceof GuiMultiplayer) && Recorder.INSTANCE.getRecording()) {
         Recorder.INSTANCE.leaveGame();
       }
@@ -114,6 +116,24 @@ abstract class MinecraftMixin {
     // TODO - record a client event here (opened escape menu)
     if (LiteModRecordingModKt.getActiveReplay() != null) {
       ci.cancel();
+    }
+  }
+
+
+  @Redirect(method = "setIngameFocus", at = @At(value = "INVOKE", target = "Lnet/minecraft/util/MouseHelper;grabMouseCursor()V"))
+  public void grabMouseCursor(MouseHelper instance) {
+    if (LiteModRecordingModKt.getActiveReplay() == null) {
+      Mouse.setGrabbed(true);
+      instance.deltaX = 0;
+      instance.deltaY = 0;
+    }
+  }
+
+  @Redirect(method = "setIngameNotInFocus", at = @At(value = "INVOKE", target = "Lnet/minecraft/util/MouseHelper;ungrabMouseCursor()V"))
+  public void ungrabMouseCursor(MouseHelper instance) {
+    if (LiteModRecordingModKt.getActiveReplay() == null) {
+      Mouse.setCursorPosition(Display.getWidth() / 2, Display.getHeight() / 2);
+      Mouse.setGrabbed(false);
     }
   }
 

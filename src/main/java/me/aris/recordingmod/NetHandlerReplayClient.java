@@ -344,6 +344,9 @@ public class NetHandlerReplayClient extends NetHandlerPlayClient {
    */
   public void handleEntityMetadata(SPacketEntityMetadata packetIn) {
 //    PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.client);
+    if (this.world == null) {
+      System.out.println("well that's kinda weird why world null");
+    }
     Entity entity = this.world.getEntityByID(packetIn.getEntityId());
 
     if (entity != null && packetIn.getDataManagerEntries() != null) {
@@ -538,7 +541,7 @@ public class NetHandlerReplayClient extends NetHandlerPlayClient {
 //    PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.client);
 
     if (packetIn.isFullChunk()) {
-      System.out.println("Loading chunk: " + packetIn.getChunkX() + ", " + packetIn.getChunkZ());
+//      System.out.println("Loading chunk: " + packetIn.getChunkX() + ", " + packetIn.getChunkZ());
       this.world.doPreChunk(packetIn.getChunkX(), packetIn.getChunkZ(), true);
     }
 
@@ -1451,6 +1454,13 @@ public class NetHandlerReplayClient extends NetHandlerPlayClient {
 
   public void handleUpdateBossInfo(SPacketUpdateBossInfo packetIn) {
 //    PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.client);
+    if (packetIn.getOperation() == SPacketUpdateBossInfo.Operation.ADD) {
+      // is this great? no
+      // does it work? yessssssssss
+      if (packetIn.getName().getUnformattedText().toLowerCase().contains("- hp ")) {
+        this.client.ingameGUI.getBossOverlay().clearBossInfos();
+      }
+    }
     this.client.ingameGUI.getBossOverlay().read(packetIn);
   }
 
@@ -1641,6 +1651,7 @@ public class NetHandlerReplayClient extends NetHandlerPlayClient {
         scoreboard.removeTeam(scoreplayerteam);
       }
     } catch (Exception ignored) {
+      ignored.printStackTrace();
     }
   }
 

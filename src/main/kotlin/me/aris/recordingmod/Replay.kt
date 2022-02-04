@@ -1,13 +1,19 @@
 package me.aris.recordingmod
 
 import com.mojang.authlib.GameProfile
+import com.sun.org.apache.xpath.internal.operations.Bool
 import io.netty.buffer.Unpooled
+import jdk.jfr.internal.handlers.EventHandler.timestamp
 import me.aris.recordingmod.PacketIDsLol.blockChangeID
 import me.aris.recordingmod.PacketIDsLol.bossBarID
+import me.aris.recordingmod.PacketIDsLol.chatID
 import me.aris.recordingmod.PacketIDsLol.chunkDataID
 import me.aris.recordingmod.PacketIDsLol.chunkUnloadID
+import me.aris.recordingmod.PacketIDsLol.customSoundID
 import me.aris.recordingmod.PacketIDsLol.destroyEntityID
 import me.aris.recordingmod.PacketIDsLol.displayObjective
+import me.aris.recordingmod.PacketIDsLol.effectID
+import me.aris.recordingmod.PacketIDsLol.entityEffectID
 import me.aris.recordingmod.PacketIDsLol.explosionID
 import me.aris.recordingmod.PacketIDsLol.headerFooterID
 import me.aris.recordingmod.PacketIDsLol.joinGameID
@@ -15,6 +21,7 @@ import me.aris.recordingmod.PacketIDsLol.multiBlockChangeID
 import me.aris.recordingmod.PacketIDsLol.playerListID
 import me.aris.recordingmod.PacketIDsLol.respawnID
 import me.aris.recordingmod.PacketIDsLol.scoreboardObjective
+import me.aris.recordingmod.PacketIDsLol.soundID
 import me.aris.recordingmod.PacketIDsLol.spawnEXPOrbID
 import me.aris.recordingmod.PacketIDsLol.spawnGlobalID
 import me.aris.recordingmod.PacketIDsLol.spawnMobID
@@ -25,6 +32,7 @@ import me.aris.recordingmod.PacketIDsLol.teamsID
 import me.aris.recordingmod.PacketIDsLol.updateScore
 import me.aris.recordingmod.mixins.GuiContainerCreativeAccessor
 import me.aris.recordingmod.mixins.SPacketMultiBlockChangeAccessor
+import net.minecraft.client.gui.GuiDownloadTerrain
 import net.minecraft.client.gui.ScaledResolution
 import net.minecraft.client.gui.inventory.GuiContainerCreative
 import net.minecraft.network.Packet
@@ -37,9 +45,10 @@ import java.io.*
 import java.nio.channels.FileChannel
 import java.util.*
 import kotlin.math.hypot
+import kotlin.math.min
 import kotlin.system.measureNanoTime
 
-data class TimestampedRotation(val yaw: Float, val pitch: Float, val timestamp: Timestamp)
+data class TimestampedRotation(val yaw: Float, val pitch: Float, var timestamp: Timestamp)
 data class Timestamp(val tickdex: Int, val partialTicks: Float) {
   operator fun minus(timestamp: Timestamp) =
     (this.tickdex - timestamp.tickdex).toFloat() + (this.partialTicks - timestamp.partialTicks)
@@ -51,13 +60,13 @@ object ReplayState {
     if (replay.tickdex >= replay.ticks.size) return null
 
     replay.keepLoading()
+
     val (i, _) = replay.ticks
-      .subList(replay.tickdex, replay.ticks.size - 1)
+      .subList(replay.tickdex, min(replay.tickdex + 4, replay.ticks.size - 1))
       .withIndex()
       .find { (i, tick) ->
-        tick!!.clientEvents.any { clientEvent ->
+        tick?.clientEvents?.any { clientEvent ->
           val ret = clientEvent is ClientEvent.Look && clientEvent.cameraRotations.any {
-//            println("${it.timestamped(replay.tickdex + i).timestamp}, $now")
             val timestamped = it.timestamped(replay.tickdex + i)
             val ret = timestamped.timestamp - now > 0f
             if (ret) {
@@ -67,11 +76,13 @@ object ReplayState {
             ret
           }
           ret
-        }
+        } == true
       } ?: return null
 
     return hahaha
   }
+
+  var wasOnHorse = false
 
   fun updateCameraRotations(partialTicks: Float) {
     val replay = activeReplay!!
@@ -86,6 +97,7 @@ object ReplayState {
       this.prevRotation.yaw,
       this.prevRotation.pitch
     )
+
     var nextRotationAtTick = findNext(replay, now)
 
     nextRotationAtTick?.let {
@@ -106,21 +118,31 @@ object ReplayState {
         )
 
         if (nextDelta > currentDelta && currentDelta < prevDelta * 0.8) {
-//          println("low old delta ($prevDelta) ($currentDelta), skipping")
           nextRotationAtTick = afterNextRotationsAtTick
         }
       }
     }
-//    println("latest: ${latestRotation?.timestamp}, $now")
 
     nextRotationAtTick?.let {
       if (it.timestamp - this.nextRotation.timestamp > 0f && it.timestamp - now > 0f) {
-//        println("cool new next: ${it.timestamp - now}")
-//        this.prevRotation = this.nextRotation
         this.nextRotation = it
       }
     }
-    val (yaw, pitch) = calculateRotation(this.nextRotation, this.prevRotation, now)
+
+    var (yaw, pitch) = calculateRotation(this.nextRotation, this.prevRotation, now)
+    if (this.nextRotation.timestamp - this.prevRotation.timestamp < 0) {
+      yaw = this.nextRotation.yaw
+      pitch = this.nextRotation.pitch
+    }
+
+    if (nextAbsoluteState?.ridingID != null && nextAbsoluteState?.ridingID != -1 && !wasOnHorse) {
+      val ent = mc.world.getEntityByID(nextAbsoluteState!!.ridingID)
+      yaw = nextRotationAtTick?.yaw ?: ent?.rotationYaw ?: 0f
+      pitch = nextRotationAtTick?.pitch ?: ent?.rotationPitch ?: 0f
+      this.nextRotation = TimestampedRotation(yaw, pitch, now)
+    }
+    wasOnHorse = nextAbsoluteState?.ridingID != -1
+
     mc.player?.let {
       it.prevRotationYaw = yaw
       it.prevRotationPitch = pitch
@@ -145,6 +167,14 @@ object ReplayState {
     val partialPartialTicks = (now - prev.timestamp) / timeBetween
     val deltaX = next.yaw - prev.yaw
     val deltaY = next.pitch - prev.pitch
+
+    val theplace = Pair(
+      deltaX * partialPartialTicks + prev.yaw,
+      deltaY * partialPartialTicks + prev.pitch
+    )
+//    if (Keyboard.isKeyDown(Keyboard.KEY_B)) {
+//      println("calculate rotation: \n\t$prev \n\t$next \n\t$theplace")
+//    }
 
     return Pair(
       deltaX * partialPartialTicks + prev.yaw,
@@ -198,7 +228,7 @@ class Replay(private val replayFile: File) {
   var netHandler = NetHandlerReplayClient(
     mc,
     null, // TODO - make this the replay screen !!!!!
-    GameProfile(UUID.randomUUID(), "Guy")
+    mc.session.profile
   )
 
   private fun InputStream.readVarInt(): Int {
@@ -222,7 +252,7 @@ class Replay(private val replayFile: File) {
   }
 
   fun keepLoading(tickdex: Int = this.tickdex) {
-    if (this.ticks[tickdex] != null) return
+    if (this.ticks.getOrNull(tickdex) != null) return
     println("ok we loadin: $tickdex")
 
     val loadTime = measureNanoTime {
@@ -233,61 +263,66 @@ class Replay(private val replayFile: File) {
 
       println("starting at $startPosition")
       fileChannels@ while (true) {
-        val fileChannel = FileInputStream(replayFile).channel
-        val bb =
-          fileChannel.map(
-            FileChannel.MapMode.READ_ONLY,
-            startPosition,
-            (fileChannel.size() - startPosition).coerceAtMost(maxBufferSize.toLong())
-          )
+        try {
+          val fileChannel = FileInputStream(replayFile).channel
+          val bb =
+            fileChannel.map(
+              FileChannel.MapMode.READ_ONLY,
+              startPosition,
+              (fileChannel.size() - startPosition).coerceAtMost(maxBufferSize.toLong())
+            )
 
-        val buffer = PacketBuffer(Unpooled.wrappedBuffer(bb))
-        val clientEvents = mutableListOf<ClientEvent>()
-        val serverPackets = mutableListOf<RawServerPacket>()
+          val buffer = PacketBuffer(Unpooled.wrappedBuffer(bb))
+          val clientEvents = mutableListOf<ClientEvent>()
+          val serverPackets = mutableListOf<RawServerPacket>()
 
-        while (true) {
-          // Check if we've reached the end of our buffer
-          if (buffer.readableBytes() <= 0 || tickCount > 6000) {
-            buffer.release()
-            (bb as DirectBuffer).cleaner().clean()
-            fileChannel.close()
-            break@fileChannels
-          }
-          // Check if we need to get another buffer
-          else if (fileSize - startPosition > maxBufferSize && buffer.readableBytes() <= 1024 * 1024 * 50) {
-            println("MORELOADING we need a new buffer: ${buffer.readableBytes()} left to read. $startPosition - startpos")
-            startPosition += buffer.readerIndex()
-            buffer.release()
-            (bb as DirectBuffer).cleaner().clean()
-            fileChannel.close()
-            continue@fileChannels
-          }
-
-          val i = buffer.readVarInt()
-          if (i < 0) {
-            val clientEvent = ClientEvent.eventFromId(i)
-            clientEvent.loadFromBuffer(buffer)
-
-            if (clientEvent is ClientEvent.TickEnd) {
-              if (tickdex + tickCount >= this.ticks.size) {
-                buffer.release()
-                (bb as DirectBuffer).cleaner().clean()
-                fileChannel.close()
-                break@fileChannels
-              }
-              this.ticks[tickdex + tickCount] =
-                ReplayTick(clientEvents.toList(), serverPackets.toList())
-              clientEvents.clear()
-              serverPackets.clear()
-              tickCount++
-              continue
-            } else {
-              clientEvents.add(clientEvent)
+          while (true) {
+            // Check if we've reached the end of our buffer
+            if (buffer.readableBytes() <= 0 || tickCount > 6000) {
+              buffer.release()
+              (bb as DirectBuffer).cleaner().clean()
+              fileChannel.close()
+              break@fileChannels
             }
-          } else {
-            val size = buffer.readVarInt()
-            serverPackets.add(RawServerPacket(i, size, buffer.readBytes(size)))
+            // Check if we need to get another buffer
+            else if (fileSize - startPosition > maxBufferSize && buffer.readableBytes() <= 1024 * 1024 * 50) {
+              println("MORELOADING we need a new buffer: ${buffer.readableBytes()} left to read. $startPosition - startpos")
+              startPosition += buffer.readerIndex()
+              buffer.release()
+              (bb as DirectBuffer).cleaner().clean()
+              fileChannel.close()
+              continue@fileChannels
+            }
+
+            val i = buffer.readVarInt()
+            if (i < 0) {
+              val clientEvent = ClientEvent.eventFromId(i)
+              clientEvent.loadFromBuffer(buffer)
+
+              if (clientEvent is ClientEvent.TickEnd) {
+                if (tickdex + tickCount >= this.ticks.size) {
+                  buffer.release()
+                  (bb as DirectBuffer).cleaner().clean()
+                  fileChannel.close()
+                  break@fileChannels
+                }
+                this.ticks[tickdex + tickCount] =
+                  ReplayTick(clientEvents.toList(), serverPackets.toList())
+                clientEvents.clear()
+                serverPackets.clear()
+                tickCount++
+                continue
+              } else {
+                clientEvents.add(clientEvent)
+              }
+            } else {
+              val size = buffer.readVarInt()
+              serverPackets.add(RawServerPacket(i, size, buffer.readBytes(size)))
+            }
           }
+        } catch (uhoh: Exception) {
+          uhoh.printStackTrace()
+          break
         }
       }
     }
@@ -301,7 +336,7 @@ class Replay(private val replayFile: File) {
 
       var startPosition = 0L
       val fileSize = replayFile.length()
-      val maxBufferSize = 1024 * 1024 * 512
+      val maxBufferSize = 1024 * 1024 * 1024
       var tickCount = 0
 
       fileChannels@ while (true) {
@@ -325,7 +360,7 @@ class Replay(private val replayFile: File) {
             break@fileChannels
           }
           // Check if we need to get another buffer
-          else if (fileSize - startPosition > maxBufferSize && buffer.readableBytes() <= 1024 * 1024 * 50) {
+          else if (fileSize - startPosition > maxBufferSize && buffer.readableBytes() <= 1024 * 1024 * 128) {
             println(" we need a new buffer: ${buffer.readableBytes()} left to read. $startPosition - startpos")
             startPosition += buffer.readerIndex()
             buffer.release()
@@ -380,6 +415,10 @@ class Replay(private val replayFile: File) {
           // OH YEAH
           val packetProcessIndex = Pair(i, i2)
 
+          if (rawPacket.packetID == soundID || rawPacket.packetID == customSoundID || rawPacket.packetID == effectID || rawPacket.packetID == entityEffectID) {
+            ignoredPacketInfo.add(packetProcessIndex)
+          }
+
           // Block changes
           if (rawPacket.packetID == explosionID) {
             val packet = rawPacket.cookPacket() as SPacketExplosion
@@ -398,6 +437,7 @@ class Replay(private val replayFile: File) {
               mutableListOf()
             }.add(packetProcessIndex)
           }
+
           if (rawPacket.packetID == blockChangeID) {
             val packet = rawPacket.cookPacket() as SPacketBlockChange
             val chunkX = packet.blockPosition.x shr 4
@@ -552,7 +592,7 @@ class Replay(private val replayFile: File) {
   fun playNextTick() {
     if (this.tickdex < this.ticks.size) {
       this.keepLoading()
-      this.ticks[this.tickdex]!!.replayFull()
+      this.ticks[this.tickdex]?.replayFull()
       this.tickdex++
     }
   }
@@ -562,6 +602,14 @@ class Replay(private val replayFile: File) {
     val scaled = ScaledResolution(mc)
     ReplayState.scaledRes =
       Triple(scaled.scaledWidth_double, scaled.scaledHeight_double, scaled.scaleFactor)
+    ReplayState.currentGuiState = null
+    ReplayState.nextGuiState = null
+    ReplayState.nextAbsoluteState = null
+    ReplayState.nextGuiProcessState = null
+    ReplayState.wasOnHorse = false
+    ReplayState.nextKeybindingState = ClientEvent.trackedKeybinds.map {
+      Pair(false, 0)
+    }
 
     // TODO - store uuid and stuff and name in the replay file
     // TODO - when you do this, also store the creative tab (lmao)
@@ -573,7 +621,6 @@ class Replay(private val replayFile: File) {
     // TODO - when you do this, also store the creative tab (lmao)
 
     this.tickdex = 0
-    ReplayState.nextAbsoluteState = null
 
     mc.ingameGUI.chatGUI.clearChatMessages(true)
 //    mc.gameSettings.showDebugInfo = true
@@ -581,7 +628,7 @@ class Replay(private val replayFile: File) {
     this.netHandler = NetHandlerReplayClient(
       mc,
       null,
-      GameProfile(UUID.randomUUID(), "Guy")
+      mc.session.profile
     )
   }
 
@@ -599,11 +646,13 @@ class Replay(private val replayFile: File) {
 
   fun skipTo(targetTick: Int) {
     skipping = true
+
+    mc.displayGuiScreen(GuiDownloadTerrain())
     this.restart()
 
     // Find last tickdex that contains a respawn packet
     if (targetTick > 20) {
-      val fastTargetTick = (targetTick - 20).coerceAtLeast(0)
+      val fastTargetTick = (targetTick.coerceAtMost(this.ticks.size - 1) - 20).coerceAtLeast(0)
       var latestTickdex = 0
       val latestRespawnPacketAndOthers = mutableListOf<Pair<Int, Int>>()
       for (i in 0 until fastTargetTick) {
@@ -643,22 +692,26 @@ class Replay(private val replayFile: File) {
         this.keepLoading(i)
         val tick = this.ticks[i]!!
         tick.serverPackets.filter {
-          it.packetID == teamsID
-            || it.packetID == updateScore
+//          it.packetID == teamsID - didn't need this i guess lol
+          it.packetID == updateScore
             || it.packetID == bossBarID
             || it.packetID == scoreboardObjective
             || it.packetID == displayObjective
             || it.packetID == playerListID
             || it.packetID == headerFooterID
         }.forEach {
-          it.cookPacket().processPacket(netHandler)
+          processPacket(it)
         }
+
+//        blipping = true
+//        mc.runTick()
+//        blipping = false
       }
 
       // Respawn + extra packets that tick
       latestRespawnPacketAndOthers.forEach { (i, i2) ->
         this.keepLoading(i)
-        this.ticks[i]!!.serverPackets[i2].cookPacket().processPacket(netHandler)
+        processPacket(this.ticks[i]!!.serverPackets[i2])
       }
 
       // Client stuff too I guess
@@ -674,8 +727,10 @@ class Replay(private val replayFile: File) {
 
     val wasPaused = paused
     paused = false
-    for (i in 0..20.coerceAtMost(targetTick)) {
-      mc.runTick()
+    if (targetTick > 0) {
+      for (i in 0..20.coerceAtMost(targetTick)) {
+        mc.runTick()
+      }
     }
     skipping = false
     paused = wasPaused

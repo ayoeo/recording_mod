@@ -3,6 +3,7 @@ package me.aris.recordingmod
 import net.minecraft.network.EnumConnectionState
 import net.minecraft.network.EnumPacketDirection
 import net.minecraft.network.play.server.*
+import net.minecraft.network.status.server.SPacketServerInfo
 
 @Suppress("HasPlatformType")
 object PacketIDsLol {
@@ -22,7 +23,7 @@ object PacketIDsLol {
       EnumPacketDirection.CLIENTBOUND,
       SPacketScoreboardObjective()
     )
-  
+
   val displayObjective =
     EnumConnectionState.PLAY.getPacketId(
       EnumPacketDirection.CLIENTBOUND,
@@ -51,6 +52,12 @@ object PacketIDsLol {
       EnumPacketDirection.CLIENTBOUND,
       SPacketPlayerListHeaderFooter()
     )
+  
+//  val headerFooterID =
+//    EnumConnectionState.PLAY.getPacketId(
+//      EnumPacketDirection.CLIENTBOUND,
+//      SPacketSpawnPlayer()
+//    )
 
   val chunkDataID =
     EnumConnectionState.PLAY.getPacketId(EnumPacketDirection.CLIENTBOUND, SPacketChunkData())
@@ -102,6 +109,19 @@ object PacketIDsLol {
       EnumPacketDirection.CLIENTBOUND,
       SPacketSpawnGlobalEntity()
     )
+
+  val entityMetadata =
+    EnumConnectionState.PLAY.getPacketId(
+      EnumPacketDirection.CLIENTBOUND,
+      SPacketEntityMetadata()
+    )
+
+  val entityEquipment =
+    EnumConnectionState.PLAY.getPacketId(
+      EnumPacketDirection.CLIENTBOUND,
+      SPacketEntityEquipment()
+    )
+
   val destroyEntityID =
     EnumConnectionState.PLAY.getPacketId(
       EnumPacketDirection.CLIENTBOUND,
@@ -112,6 +132,37 @@ object PacketIDsLol {
     EnumConnectionState.PLAY.getPacketId(
       EnumPacketDirection.CLIENTBOUND,
       SPacketRespawn()
+    )
+
+  val soundID =
+    EnumConnectionState.PLAY.getPacketId(
+      EnumPacketDirection.CLIENTBOUND,
+      SPacketSoundEffect()
+    )
+
+  val chatID =
+    EnumConnectionState.PLAY.getPacketId(
+      EnumPacketDirection.CLIENTBOUND,
+      SPacketChat()
+    )
+
+  val customSoundID =
+    EnumConnectionState.PLAY.getPacketId(
+      EnumPacketDirection.CLIENTBOUND,
+      SPacketCustomSound()
+    )
+
+  val effectID =
+    EnumConnectionState.PLAY.getPacketId(
+      EnumPacketDirection.CLIENTBOUND,
+      SPacketEffect()
+
+    )
+
+  val entityEffectID =
+    EnumConnectionState.PLAY.getPacketId(
+      EnumPacketDirection.CLIENTBOUND,
+      SPacketEntityEffect()
     )
 
   val setslotid =

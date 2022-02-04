@@ -21,4 +21,7 @@ public interface GuiScreenAccessor {
 
   @Invoker
   void invokeMouseClickMove(int mouseX, int mouseY, int clickedMouseButton, long timeSinceLastClick);
+
+  @Invoker
+  void invokeDrawScreen(int mouseX, int mouseY, float partialTicks);
 }
