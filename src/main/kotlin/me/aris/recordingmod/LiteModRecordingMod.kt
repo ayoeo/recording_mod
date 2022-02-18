@@ -496,18 +496,23 @@ class LiteModRecordingMod : LiteMod, Tickable, com.mumfrey.liteloader.Configurab
 var skipping = false
 var blipping = false
 var paused = false
+
+var lockPov = true
+
 fun checkKeybinds(): Boolean {
   val keys = mutableListOf<Int>()
-  while (Keyboard.next()) {
-    val down = Keyboard.getEventKeyState()
-    val keycode = if (Keyboard.getEventKey() == 0) {
-      Keyboard.getEventCharacter().toInt() + 256
-    } else {
-      Keyboard.getEventKey()
-    }
+  if (lockPov) {
+    while (Keyboard.next()) {
+      val down = Keyboard.getEventKeyState()
+      val keycode = if (Keyboard.getEventKey() == 0) {
+        Keyboard.getEventCharacter().toInt() + 256
+      } else {
+        Keyboard.getEventKey()
+      }
 
-    if (down) {
-      keys.add(keycode)
+      if (down) {
+        keys.add(keycode)
+      }
     }
   }
 
@@ -598,7 +603,7 @@ fun checkKeybinds(): Boolean {
 //        activeReplay?.skipTo(149706) // 162 // breaks chunk stuff - 1_16_08_16_56
 
 //        activeReplay?.skipTo(180600) //   01_11_00_10_01 hla helmet horse weird thing
-        activeReplay?.skipTo(67832) //   t2 fight haha 12_17_20_47_39
+        activeReplay?.skipTo(179680) //   t2 fight haha 12_17_20_47_39
 //        activeReplay?.skipTo(236000) //   01_04_04_50_58 hla riph stronghold avalon
 //        activeReplay?.skipTo(67794) // 162  idk maybe broken players?? (THICKMENT THICK SO THICK)
 //        activeReplay?.skipTo(334893) // 162  idk maybe broken players??
@@ -634,9 +639,11 @@ fun preGameLoop(): Boolean {
   // This also wipes keybinds to remove player interaction from the game
 
   // MOUSE WILL NOT BE
-  @Suppress("ControlFlowWithEmptyBody") while (Mouse.next()) {
-    Mouse.getDX()
-    Mouse.getDY()
+  if (lockPov) {
+    @Suppress("ControlFlowWithEmptyBody") while (Mouse.next()) {
+      Mouse.getDX()
+      Mouse.getDY()
+    }
   }
   // TODO - let mouse back for gui? hahahah
   // MOUSE WILL NOT BE
@@ -675,8 +682,11 @@ fun preTick(): Boolean {
   activeReplay?.playNextTick()
 
   // TODO - put this back lol
-  mc.player?.rotationYaw = ReplayState.nextYaw
-  mc.player?.rotationPitch = ReplayState.nextPitch
+
+  if (lockPov) {
+    mc.player?.rotationYaw = ReplayState.nextYaw
+    mc.player?.rotationPitch = ReplayState.nextPitch
+  }
 
   return false
 }

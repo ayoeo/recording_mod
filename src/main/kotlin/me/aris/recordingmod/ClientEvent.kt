@@ -29,6 +29,7 @@ import net.minecraft.util.math.Vec3d
 import org.lwjgl.input.Keyboard
 import org.lwjgl.input.Mouse
 import java.nio.ByteBuffer
+import java.security.Key
 
 class RawServerPacket(val packetID: Int, val size: Int, val buffer: ByteBuf) {
   fun cookPacket(): Packet<NetHandlerReplayClient> {
@@ -126,14 +127,9 @@ class ReplayTick(
       event.processEvent(ReplayState)
     }
 
-//    serverPackets.withIndex()
-//      .filterNot { Pair(ourIndex, it.index) in ignorePackets }
-//      .filterNot { isEntityThing(it.value) }
-//      .forEach { processPacket(it.value) }
-
+    var thingthingisthedoesitspawnthethingorwhatidk = false
     serverPackets.withIndex()
       .filterNot { Pair(ourIndex, it.index) in ignorePackets }
-//      .filter { isEntityThing(it.value) }
       .forEach { (_, rawPacket) ->
         val chunkCoords = when (rawPacket.packetID) {
           spawnPlayerID -> (rawPacket.cookPacket() as SPacketSpawnPlayer).let { Pair(it.x, it.z) }
@@ -159,15 +155,47 @@ class ReplayTick(
           }
           else -> null
         }
+
         if (chunkCoords != null) {
-          blipping = true
-          mc.runTick()
-//          mc.world.loadedEntityList.forEach {
-//            it.onEntityUpdate()
-//          }
-//          mc.world.updateEntities()
-          blipping = false
+          thingthingisthedoesitspawnthethingorwhatidk = true
+          return@forEach
         }
+      }
+
+    if (thingthingisthedoesitspawnthethingorwhatidk) {
+      blipping = true
+      mc.runTick()
+      blipping = false
+    }
+
+    serverPackets.withIndex()
+      .filterNot { Pair(ourIndex, it.index) in ignorePackets }
+      .forEach { (_, rawPacket) ->
+//        val chunkCoords = when (rawPacket.packetID) {
+//          spawnPlayerID -> (rawPacket.cookPacket() as SPacketSpawnPlayer).let { Pair(it.x, it.z) }
+//          spawnMobID -> (rawPacket.cookPacket() as SPacketSpawnMob).let { Pair(it.x, it.z) }
+//          spawnEXPOrbID -> (rawPacket.cookPacket() as SPacketSpawnExperienceOrb).let {
+//            Pair(
+//              it.x,
+//              it.z
+//            )
+//          }
+//          spawnPaintingID -> (rawPacket.cookPacket() as SPacketSpawnPainting).let {
+//            Pair(
+//              it.position.x.toDouble(),
+//              it.position.z.toDouble()
+//            )
+//          }
+//          spawnObjectID -> (rawPacket.cookPacket() as SPacketSpawnObject).let { Pair(it.x, it.z) }
+//          spawnGlobalID -> (rawPacket.cookPacket() as SPacketSpawnGlobalEntity).let {
+//            Pair(
+//              it.x,
+//              it.z
+//            )
+//          }
+//          else -> null
+//        }
+
         processPacket(rawPacket)
       }
 //    serverPackets.withIndex()
@@ -217,6 +245,7 @@ class ReplayTick(
 //      }
 
     // haha forgot this haha
+
     mc.player?.rotationYaw = ReplayState.nextYaw
     mc.player?.rotationPitch = ReplayState.nextPitch
 
@@ -705,11 +734,13 @@ sealed class ClientEvent {
       mc.player.sprintingTicksLeft = this.sprintTicksLeft
       (mc.player as EntityLivingBaseAccessor).setActiveItemStackUseCount(this.itemInUseCount)
 
-      val setPosOfThisThing = riding ?: mc.player
-      setPosOfThisThing.setPosition(this.position.x, this.position.y, this.position.z)
-      setPosOfThisThing.motionX = this.motion.x
-      setPosOfThisThing.motionY = this.motion.y
-      setPosOfThisThing.motionZ = this.motion.z
+      if (lockPov) {
+        val setPosOfThisThing = riding ?: mc.player
+        setPosOfThisThing.setPosition(this.position.x, this.position.y, this.position.z)
+        setPosOfThisThing.motionX = this.motion.x
+        setPosOfThisThing.motionY = this.motion.y
+        setPosOfThisThing.motionZ = this.motion.z
+      }
 
       if (riding != null) {
         riding.rotationYaw = this.ridingYaw
@@ -769,7 +800,6 @@ sealed class ClientEvent {
 
   object Resize : ClientEvent() {
     override fun processEvent(replayState: ReplayState) {
-      println("resizing hahahahahhahahahaahhahahhhahahahhahhaahahahhahhahhah")
       (mc as MinecraftAccessor).invokeResize(mc.displayWidth, mc.displayHeight)
     }
   }

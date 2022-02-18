@@ -1611,7 +1611,11 @@ public class NetHandlerReplayClient extends NetHandlerPlayClient {
       ScorePlayerTeam scoreplayerteam;
 
       if (packetIn.getAction() == 0) {
-        scoreplayerteam = scoreboard.createTeam(packetIn.getName());
+        try {
+          scoreplayerteam = scoreboard.createTeam(packetIn.getName());
+        } catch (IllegalArgumentException e) {
+          scoreplayerteam = scoreboard.getTeam(packetIn.getName());
+        }
       } else {
         scoreplayerteam = scoreboard.getTeam(packetIn.getName());
       }

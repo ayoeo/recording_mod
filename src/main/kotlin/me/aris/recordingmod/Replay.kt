@@ -1,12 +1,8 @@
 package me.aris.recordingmod
 
-import com.mojang.authlib.GameProfile
-import com.sun.org.apache.xpath.internal.operations.Bool
 import io.netty.buffer.Unpooled
-import jdk.jfr.internal.handlers.EventHandler.timestamp
 import me.aris.recordingmod.PacketIDsLol.blockChangeID
 import me.aris.recordingmod.PacketIDsLol.bossBarID
-import me.aris.recordingmod.PacketIDsLol.chatID
 import me.aris.recordingmod.PacketIDsLol.chunkDataID
 import me.aris.recordingmod.PacketIDsLol.chunkUnloadID
 import me.aris.recordingmod.PacketIDsLol.customSoundID
@@ -38,12 +34,12 @@ import net.minecraft.client.gui.inventory.GuiContainerCreative
 import net.minecraft.network.Packet
 import net.minecraft.network.PacketBuffer
 import net.minecraft.network.play.server.*
+import net.minecraft.scoreboard.Scoreboard
 import net.minecraft.util.math.MathHelper
 import org.lwjgl.input.Keyboard
 import sun.nio.ch.DirectBuffer
 import java.io.*
 import java.nio.channels.FileChannel
-import java.util.*
 import kotlin.math.hypot
 import kotlin.math.min
 import kotlin.system.measureNanoTime
@@ -143,11 +139,14 @@ object ReplayState {
     }
     wasOnHorse = nextAbsoluteState?.ridingID != -1
 
-    mc.player?.let {
-      it.prevRotationYaw = yaw
-      it.prevRotationPitch = pitch
-      it.rotationYaw = yaw
-      it.rotationPitch = pitch
+
+    if (lockPov) {
+      mc.player?.let {
+        it.prevRotationYaw = yaw
+        it.prevRotationPitch = pitch
+        it.rotationYaw = yaw
+        it.rotationPitch = pitch
+      }
     }
     this.prevRotation = TimestampedRotation(yaw, pitch, now)
   }
@@ -404,7 +403,7 @@ class Replay(private val replayFile: File) {
     val ignoredChunks =
       hashMapOf<Pair<Int, Int>, MutableList<Pair<Pair<Int, Int>, Pair<Int, Int>>>>()
     val spawnedEntities = hashMapOf<Int, Pair<Int, Int>>()
-    var lastRespawnPacket: Pair<Int, Int>? = null
+//    var lastRespawnPacket: Pair<Int, Int>? = null
 
     // pre process
     val preprocesstime = measureNanoTime {
@@ -692,15 +691,24 @@ class Replay(private val replayFile: File) {
         this.keepLoading(i)
         val tick = this.ticks[i]!!
         tick.serverPackets.filter {
-//          it.packetID == teamsID - didn't need this i guess lol
-          it.packetID == updateScore
+          it.packetID == teamsID //- didn't need this i guess lol
+            || it.packetID == updateScore
             || it.packetID == bossBarID
             || it.packetID == scoreboardObjective
             || it.packetID == displayObjective
             || it.packetID == playerListID
             || it.packetID == headerFooterID
+            || it.packetID == respawnID
         }.forEach {
-          processPacket(it)
+          if (it.packetID == respawnID) {
+            val respawnPacket = it.cookPacket() as SPacketRespawn
+            if (respawnPacket.dimensionID == mc.player.dimension) {
+              mc.world.setWorldScoreboard(Scoreboard())
+            }
+            mc.player.dimension = respawnPacket.dimensionID
+          } else {
+            processPacket(it)
+          }
         }
 
 //        blipping = true

@@ -75,15 +75,15 @@ abstract class MinecraftMixin {
     if (LiteModRecordingModKt.getActiveReplay() != null) {
       if (Keyboard.isKeyDown(Keyboard.KEY_M)) {
 //      this.resize(2560, 1440);
-        this.resize(3840, 2160);
+//        this.resize(3840, 2160);
 //      this.resize(7680, 4320);
 //      this.resize(640, 360);
-        ScaledResolution res = new ScaledResolution(getMinecraft());
-        System.out.println("360p: " + res.getScaledWidth() + ", " + res.getScaledHeight());
+//        ScaledResolution res = new ScaledResolution(getMinecraft());
+//        System.out.println("360p: " + res.getScaledWidth() + ", " + res.getScaledHeight());
       } else if (Keyboard.isKeyDown(Keyboard.KEY_N)) {
-        this.resize(640, 360);
-        ScaledResolution res = new ScaledResolution(getMinecraft());
-        System.out.println("1080p: " + res.getScaledWidth() + ", " + res.getScaledHeight());
+//        this.resize(640, 360);
+//        ScaledResolution res = new ScaledResolution(getMinecraft());
+//        System.out.println("1080p: " + res.getScaledWidth() + ", " + res.getScaledHeight());
       }
 
       if (LiteModRecordingModKt.preGameLoop())
@@ -122,7 +122,7 @@ abstract class MinecraftMixin {
 
   @Redirect(method = "setIngameFocus", at = @At(value = "INVOKE", target = "Lnet/minecraft/util/MouseHelper;grabMouseCursor()V"))
   public void grabMouseCursor(MouseHelper instance) {
-    if (LiteModRecordingModKt.getActiveReplay() == null) {
+    if (LiteModRecordingModKt.getActiveReplay() == null || !LiteModRecordingModKt.getLockPov()) {
       Mouse.setGrabbed(true);
       instance.deltaX = 0;
       instance.deltaY = 0;
@@ -131,7 +131,7 @@ abstract class MinecraftMixin {
 
   @Redirect(method = "setIngameNotInFocus", at = @At(value = "INVOKE", target = "Lnet/minecraft/util/MouseHelper;ungrabMouseCursor()V"))
   public void ungrabMouseCursor(MouseHelper instance) {
-    if (LiteModRecordingModKt.getActiveReplay() == null) {
+    if (LiteModRecordingModKt.getActiveReplay() == null || !LiteModRecordingModKt.getLockPov()) {
       Mouse.setCursorPosition(Display.getWidth() / 2, Display.getHeight() / 2);
       Mouse.setGrabbed(false);
     }
@@ -216,8 +216,10 @@ abstract class MinecraftMixin {
       // Set key state
       for (int i = 0; i < ClientEvent.Companion.getTrackedKeybinds().length; i++) {
         Pair<Boolean, Integer> pair = ReplayState.INSTANCE.getNextKeybindingState().get(i);
-        ((KeyBindingAccessor) ClientEvent.Companion.getTrackedKeybinds()[i]).setPressed(pair.getFirst());
-        ((KeyBindingAccessor) ClientEvent.Companion.getTrackedKeybinds()[i]).setPressTime(pair.getSecond());
+        if (LiteModRecordingModKt.getLockPov()) {
+          ((KeyBindingAccessor) ClientEvent.Companion.getTrackedKeybinds()[i]).setPressed(pair.getFirst());
+          ((KeyBindingAccessor) ClientEvent.Companion.getTrackedKeybinds()[i]).setPressTime(pair.getSecond());
+        }
       }
 //        if (){
 //      if (gameSettings.keyBindAttack.isKeyDown()) {

@@ -27,8 +27,10 @@ abstract class EntityPlayerSPMixin extends EntityPlayer {
   @Inject(at = @At("HEAD"), method = "onLivingUpdate")
   private void in(CallbackInfo ci) {
     if (LiteModRecordingModKt.getActiveReplay() != null) {
-      this.rotationYaw = ReplayState.INSTANCE.getNextYaw();
-      this.rotationPitch = ReplayState.INSTANCE.getNextPitch();
+      if (LiteModRecordingModKt.getLockPov()) {
+        this.rotationYaw = ReplayState.INSTANCE.getNextYaw();
+        this.rotationPitch = ReplayState.INSTANCE.getNextPitch();
+      }
     }
   }
 }
