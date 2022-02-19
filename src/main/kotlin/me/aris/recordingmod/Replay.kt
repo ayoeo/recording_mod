@@ -218,11 +218,131 @@ object ReplayState {
 
 data class CameraRotationsAtTick(val cameraRotations: List<CameraRotation>, val tickdex: Int)
 
+class TickList(private val replayFile: File) : Iterable<ReplayTick> {
+  private val tickPositions = mutableListOf<Long>()
+
+  val size: Int
+    get() = this.tickPositions.size
+
+  init {
+    var startPosition = 0L
+    val fileSize = replayFile.length()
+    val maxBufferSize = 1024 * 1024 * 1024
+    var tickCount = 0
+
+    fileChannels@ while (true) {
+      val fileChannel = RandomAccessFile(replayFile, "r").channel
+      val bb =
+        fileChannel.map(
+          FileChannel.MapMode.READ_ONLY,
+          startPosition,
+          (fileChannel.size() - startPosition).coerceAtMost(maxBufferSize.toLong())
+        )
+
+      val buffer = PacketBuffer(Unpooled.wrappedBuffer(bb))
+
+      this.tickPositions.add(0)
+      while (true) {
+        // Check if we've reached the end of our buffer
+        if (buffer.readableBytes() <= 0) {
+          buffer.release()
+          (bb as DirectBuffer).cleaner().clean()
+          fileChannel.close()
+          break@fileChannels
+        }
+        // Check if we need to get another buffer
+        else if (fileSize - startPosition > maxBufferSize && buffer.readableBytes() <= 1024 * 1024 * 128) {
+          println(" we need a new buffer: ${buffer.readableBytes()} left to read. $startPosition - startpos")
+          startPosition += buffer.readerIndex()
+          buffer.release()
+          (bb as DirectBuffer).cleaner().clean()
+          fileChannel.close()
+          continue@fileChannels
+        }
+
+        val i = buffer.readVarInt()
+        if (i < 0) {
+          val clientEvent = ClientEvent.eventFromId(i)
+          clientEvent.loadFromBuffer(buffer)
+
+          if (clientEvent is ClientEvent.TickEnd) {
+            val filePos = startPosition + buffer.readerIndex()
+            this.tickPositions.add(filePos)
+            tickCount++
+            continue
+          }
+        } else {
+          val size = buffer.readVarInt()
+          buffer.skipBytes(size)
+        }
+      }
+    }
+  }
+
+  // store total size somehow?? check that for getornull!!!!
+
+  operator fun get(i: Int): ReplayTick {
+    // TODO - 'keeploading' goes here
+    TODO("haha")
+  }
+
+  fun getOrNull(tickdex: Int): ReplayTick? {
+    return if (tickdex >= this.tickPositions.size) {
+      null
+    } else {
+      this[tickdex]
+    }
+  }
+
+//  operator fun get() {}
+
+//  lateinit var ticks: MutableList<ReplayTick?>
+//  override fun contains(element: ReplayTick): Boolean {
+//    throw NotImplementedError()
+//  }
+//
+//  override fun containsAll(elements: Collection<ReplayTick>): Boolean {
+//    throw NotImplementedError()
+//  }
+//
+//  override fun indexOf(element: ReplayTick): Int {
+//    throw NotImplementedError()
+//  }
+//
+//  override fun isEmpty(): Boolean {
+//    throw NotImplementedError()
+//  }
+
+//  override fun iterator(): Iterator<ReplayTick> {
+//    TODO("Not yet implemented")
+//  }
+
+//  override fun lastIndexOf(element: ReplayTick): Int {
+//    throw NotImplementedError()
+//  }
+//
+//  override fun listIterator(): ListIterator<ReplayTick> {
+//    throw NotImplementedError()
+//  }
+//
+//  override fun listIterator(index: Int): ListIterator<ReplayTick> {
+//    throw NotImplementedError()
+//  }
+
+  fun subList(fromIndex: Int, toIndex: Int): List<ReplayTick> {
+    TODO("Not yet implemented")
+  }
+
+  override fun iterator(): Iterator<ReplayTick> {
+    TODO("Not yet implemented")
+  }
+  // TODO - act like a normal list, store a list of ticks up to x (size)
+}
+
 class Replay(private val replayFile: File) {
   var tickdex = 0
 
-  lateinit var ticks: MutableList<ReplayTick?>
-  val tickPositions = mutableListOf<Long>()
+  lateinit var ticks: TickList
 
   var netHandler = NetHandlerReplayClient(
     mc,
@@ -254,140 +374,88 @@ class Replay(private val replayFile: File) {
     if (this.ticks.getOrNull(tickdex) != null) return
     println("ok we loadin: $tickdex")
 
-    val loadTime = measureNanoTime {
-      var startPosition = this.tickPositions[tickdex]
-      val fileSize = replayFile.length()
-      val maxBufferSize = 1024 * 1024 * 1024
-      var tickCount = 0
-
-      println("starting at $startPosition")
-      fileChannels@ while (true) {
-        try {
-          val fileChannel = FileInputStream(replayFile).channel
-          val bb =
-            fileChannel.map(
-              FileChannel.MapMode.READ_ONLY,
-              startPosition,
-              (fileChannel.size() - startPosition).coerceAtMost(maxBufferSize.toLong())
-            )
-
-          val buffer = PacketBuffer(Unpooled.wrappedBuffer(bb))
-          val clientEvents = mutableListOf<ClientEvent>()
-          val serverPackets = mutableListOf<RawServerPacket>()
-
-          while (true) {
-            // Check if we've reached the end of our buffer
-            if (buffer.readableBytes() <= 0 || tickCount > 6000) {
-              buffer.release()
-              (bb as DirectBuffer).cleaner().clean()
-              fileChannel.close()
-              break@fileChannels
-            }
-            // Check if we need to get another buffer
-            else if (fileSize - startPosition > maxBufferSize && buffer.readableBytes() <= 1024 * 1024 * 50) {
-              println("MORELOADING we need a new buffer: ${buffer.readableBytes()} left to read. $startPosition - startpos")
-              startPosition += buffer.readerIndex()
-              buffer.release()
-              (bb as DirectBuffer).cleaner().clean()
-              fileChannel.close()
-              continue@fileChannels
-            }
-
-            val i = buffer.readVarInt()
-            if (i < 0) {
-              val clientEvent = ClientEvent.eventFromId(i)
-              clientEvent.loadFromBuffer(buffer)
-
-              if (clientEvent is ClientEvent.TickEnd) {
-                if (tickdex + tickCount >= this.ticks.size) {
-                  buffer.release()
-                  (bb as DirectBuffer).cleaner().clean()
-                  fileChannel.close()
-                  break@fileChannels
-                }
-                this.ticks[tickdex + tickCount] =
-                  ReplayTick(clientEvents.toList(), serverPackets.toList())
-                clientEvents.clear()
-                serverPackets.clear()
-                tickCount++
-                continue
-              } else {
-                clientEvents.add(clientEvent)
-              }
-            } else {
-              val size = buffer.readVarInt()
-              serverPackets.add(RawServerPacket(i, size, buffer.readBytes(size)))
-            }
-          }
-        } catch (uhoh: Exception) {
-          uhoh.printStackTrace()
-          break
-        }
-      }
-    }
+//    val loadTime = measureNanoTime {
+//      var startPosition = this.tickPositions[tickdex]
+//      val fileSize = replayFile.length()
+//      val maxBufferSize = 1024 * 1024 * 1024
+//      var tickCount = 0
+//
+//      println("starting at $startPosition")
+//      fileChannels@ while (true) {
+//        try {
+//          val fileChannel = FileInputStream(replayFile).channel
+//          val bb =
+//            fileChannel.map(
+//              FileChannel.MapMode.READ_ONLY,
+//              startPosition,
+//              (fileChannel.size() - startPosition).coerceAtMost(maxBufferSize.toLong())
+//            )
+//
+//          val buffer = PacketBuffer(Unpooled.wrappedBuffer(bb))
+//          val clientEvents = mutableListOf<ClientEvent>()
+//          val serverPackets = mutableListOf<RawServerPacket>()
+//
+//          while (true) {
+//            // Check if we've reached the end of our buffer
+//            if (buffer.readableBytes() <= 0 || tickCount > 6000) {
+//              buffer.release()
+//              (bb as DirectBuffer).cleaner().clean()
+//              fileChannel.close()
+//              break@fileChannels
+//            }
+//            // Check if we need to get another buffer
+//            else if (fileSize - startPosition > maxBufferSize && buffer.readableBytes() <= 1024 * 1024 * 50) {
+//              println("MORELOADING we need a new buffer: ${buffer.readableBytes()} left to read. $startPosition - startpos")
+//              startPosition += buffer.readerIndex()
+//              buffer.release()
+//              (bb as DirectBuffer).cleaner().clean()
+//              fileChannel.close()
+//              continue@fileChannels
+//            }
+//
+//            val i = buffer.readVarInt()
+//            if (i < 0) {
+//              val clientEvent = ClientEvent.eventFromId(i)
+//              clientEvent.loadFromBuffer(buffer)
+//
+//              if (clientEvent is ClientEvent.TickEnd) {
+//                if (tickdex + tickCount >= this.ticks.size) {
+//                  buffer.release()
+//                  (bb as DirectBuffer).cleaner().clean()
+//                  fileChannel.close()
+//                  break@fileChannels
+//                }
+//                this.ticks[tickdex + tickCount] =
+//                  ReplayTick(clientEvents.toList(), serverPackets.toList())
+//                clientEvents.clear()
+//                serverPackets.clear()
+//                tickCount++
+//                continue
+//              } else {
+//                clientEvents.add(clientEvent)
+//              }
+//            } else {
+//              val size = buffer.readVarInt()
+//              serverPackets.add(RawServerPacket(i, size, buffer.readBytes(size)))
+//            }
+//          }
+//        } catch (uhoh: Exception) {
+//          uhoh.printStackTrace()
+//          break
+//        }
+//      }
+//    }
+    // TODO - PUT THIS IN THE THING UP PUT IT UP ^^^
 //    this.ticks.subList(0, max(0, tickdex - 1)).replaceAll { null }
 
-    println("Keep loading from ${tickdex}: ${loadTime / 1000000}ms")
+//    println("Keep loading from ${tickdex}: ${loadTime / 1000000}ms")
   }
 
   init {
     val loadTime = measureNanoTime {
 
-      var startPosition = 0L
-      val fileSize = replayFile.length()
-      val maxBufferSize = 1024 * 1024 * 1024
-      var tickCount = 0
-
-      fileChannels@ while (true) {
-        val fileChannel = FileInputStream(replayFile).channel
-        val bb =
-          fileChannel.map(
-            FileChannel.MapMode.READ_ONLY,
-            startPosition,
-            (fileChannel.size() - startPosition).coerceAtMost(maxBufferSize.toLong())
-          )
-
-        val buffer = PacketBuffer(Unpooled.wrappedBuffer(bb))
-
-        this.tickPositions.add(0)
-        while (true) {
-          // Check if we've reached the end of our buffer
-          if (buffer.readableBytes() <= 0) {
-            buffer.release()
-            (bb as DirectBuffer).cleaner().clean()
-            fileChannel.close()
-            break@fileChannels
-          }
-          // Check if we need to get another buffer
-          else if (fileSize - startPosition > maxBufferSize && buffer.readableBytes() <= 1024 * 1024 * 128) {
-            println(" we need a new buffer: ${buffer.readableBytes()} left to read. $startPosition - startpos")
-            startPosition += buffer.readerIndex()
-            buffer.release()
-            (bb as DirectBuffer).cleaner().clean()
-            fileChannel.close()
-            continue@fileChannels
-          }
-
-          val i = buffer.readVarInt()
-          if (i < 0) {
-            val clientEvent = ClientEvent.eventFromId(i)
-            clientEvent.loadFromBuffer(buffer)
-
-            if (clientEvent is ClientEvent.TickEnd) {
-              val filePos = startPosition + buffer.readerIndex()
-              this.tickPositions.add(filePos)
-              tickCount++
-              continue
-            }
-          } else {
-            val size = buffer.readVarInt()
-            buffer.skipBytes(size)
-          }
-        }
-      }
-
-      this.ticks = MutableList(tickCount + 1) { null }
-      println("ticks: $tickCount")
+      this.ticks = TickList(replayFile)
+//      println("ticks: $tickCount")
     }
 
     println("Total load time for ${replayFile.name}: ${loadTime / 1000000}ms")
@@ -684,12 +752,12 @@ class Replay(private val replayFile: File) {
       joinPacket?.processPacket(netHandler)
 
       this.keepLoading(latestTickdex)
-      val firstTick = this.ticks[latestTickdex]!!
+      val firstTick = this.ticks[latestTickdex]
 
       // Replay important packets that bungee like doesn't care about???
       for (i in 0 until latestTickdex) {
         this.keepLoading(i)
-        val tick = this.ticks[i]!!
+        val tick = this.ticks[i]
         tick.serverPackets.filter {
           it.packetID == teamsID //- didn't need this i guess lol
             || it.packetID == updateScore
