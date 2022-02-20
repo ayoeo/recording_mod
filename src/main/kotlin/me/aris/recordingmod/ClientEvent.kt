@@ -2,6 +2,7 @@ package me.aris.recordingmod
 
 import com.mumfrey.liteloader.gl.GL.*
 import io.netty.buffer.ByteBuf
+import io.netty.buffer.Unpooled
 import me.aris.recordingmod.PacketIDsLol.chunkDataID
 import me.aris.recordingmod.PacketIDsLol.destroyEntityID
 import me.aris.recordingmod.PacketIDsLol.entityEquipment
@@ -31,7 +32,7 @@ import org.lwjgl.input.Mouse
 import java.nio.ByteBuffer
 import java.security.Key
 
-class RawServerPacket(val packetID: Int, val size: Int, val buffer: ByteBuf) {
+class RawServerPacket(val packetID: Int, val size: Int, val buffer: ByteArray) {
   fun cookPacket(): Packet<NetHandlerReplayClient> {
     @Suppress("UNCHECKED_CAST")
     val packet: Packet<NetHandlerReplayClient> =
@@ -40,7 +41,7 @@ class RawServerPacket(val packetID: Int, val size: Int, val buffer: ByteBuf) {
         this.packetID
       ) as Packet<NetHandlerReplayClient>
 
-    packet.readPacketData(PacketBuffer(this.buffer.duplicate()))
+    packet.readPacketData(PacketBuffer(Unpooled.wrappedBuffer(this.buffer)))
     return packet
   }
 }
@@ -444,9 +445,9 @@ sealed class ClientEvent {
       // I actually don't care shut up this is fine
       activeReplay?.let { replay ->
         replayState.nextGuiState =
-          replay.ticks.getOrNull(replay.tickdex + 1)?.clientEvents?.firstOrNull { it is GuiState } as GuiState?
+          replay.ticks!!.getOrNull(replay.tickdex - replay.loadedTickdex + 1)?.clientEvents?.firstOrNull { it is GuiState } as GuiState?
         replayState.nextGuiStateButLikeAfterThisOneGodHelpUsAll =
-          replay.ticks.getOrNull(replay.tickdex + 2)?.clientEvents?.firstOrNull { it is GuiState } as GuiState?
+          replay.ticks!!.getOrNull(replay.tickdex - replay.loadedTickdex + 2)?.clientEvents?.firstOrNull { it is GuiState } as GuiState?
       }
     }
 
