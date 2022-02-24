@@ -31,6 +31,7 @@ import org.lwjgl.input.Keyboard
 import org.lwjgl.input.Mouse
 import java.nio.ByteBuffer
 import java.security.Key
+import kotlin.reflect.KParameter
 
 class RawServerPacket(val packetID: Int, val size: Int, val buffer: ByteArray) {
   fun cookPacket(): Packet<NetHandlerReplayClient> {
@@ -84,7 +85,7 @@ class ReplayTick(
         processPacket(rawPacket)
 
         if (id != null) {
-          for (ent in mc.world.loadedEntityList.toList()) {
+          for (ent in mc.world?.loadedEntityList?.toList() ?: emptyList()) {
             if (ent.isDead) {
               val l1 = ent.chunkCoordX
               val i2 = ent.chunkCoordZ
@@ -121,6 +122,15 @@ class ReplayTick(
 //    mc.world.chunkProvider
     // idc idk idc whatever whatever whatever it's fine this is fine not indicative of a more severe problem idc
     mc.player?.world = mc.world
+
+    if (mc.currentScreen != null) {
+      (mc as MinecraftAccessor).leftClickCounter = 10000
+    }
+
+    // haha process
+    val guiState = ReplayState.nextGuiProcessState
+    guiState?.executeEvents()
+    ReplayState.nextGuiProcessState = null
 
     ReplayState.nextAbsoluteState?.runitbaby(true)
 
@@ -247,14 +257,12 @@ class ReplayTick(
 
     // haha forgot this haha
 
-    mc.player?.rotationYaw = ReplayState.nextYaw
-    mc.player?.rotationPitch = ReplayState.nextPitch
-
-    mc.entityRenderer.getMouseOver(1.0F)
+    mc.inGameHasFocus = true
 
     // Keybindment
     val mc = mc as MinecraftAccessor
 
+    // 376 - haha
     if (mc.leftClickCounter > 0) {
       --mc.leftClickCounter
     }
@@ -262,6 +270,14 @@ class ReplayTick(
       --mc.rightClickDelayTimer
     }
     mc.invokeProcessKeyBinds()
+
+    mc as Minecraft
+    mc.player?.prevRotationYaw = ReplayState.nextYaw
+    mc.player?.rotationYaw = ReplayState.nextYaw
+    mc.player?.prevRotationPitch = ReplayState.nextPitch
+    mc.player?.rotationPitch = ReplayState.nextPitch
+
+    mc.entityRenderer.getMouseOver(1.0F)
   }
 }
 
@@ -444,6 +460,7 @@ sealed class ClientEvent {
 
       // I actually don't care shut up this is fine
       activeReplay?.let { replay ->
+        replay.keepLoading(replay.tickdex)
         replayState.nextGuiState =
           replay.ticks!!.getOrNull(replay.tickdex - replay.loadedTickdex + 1)?.clientEvents?.firstOrNull { it is GuiState } as GuiState?
         replayState.nextGuiStateButLikeAfterThisOneGodHelpUsAll =
@@ -471,14 +488,15 @@ sealed class ClientEvent {
         if (skipping) {
           val pos = this.getLameMousePos(partialTicks)
           val (x, y) = pos.getScaledXY()
-          Mouse.setGrabbed(true)
-          Mouse.setCursorPosition(x, y)
-          Mouse.setGrabbed(false)
+//          Mouse.setGrabbed(true)
+//          Mouse.setCursorPosition(x, y)
+//          Mouse.setGrabbed(false)
+
           val scaledresolution = ScaledResolution(mc)
           val i1 = scaledresolution.scaledWidth
           val j1 = scaledresolution.scaledHeight
-          val xlmao = Mouse.getX() * i1 / mc.displayWidth
-          val ylmao = j1 - Mouse.getY() * j1 / mc.displayHeight - 1
+          val xlmao = x * i1 / mc.displayWidth
+          val ylmao = j1 - y * j1 / mc.displayHeight - 1
           val currentScreen = mc.currentScreen
           if (currentScreen is GuiContainer) {
             currentScreen.inventorySlots.inventorySlots.forEach { slot ->

@@ -10,6 +10,7 @@ layout(binding = 2) writeonly buffer U { uint u_ch[]; };
 
 layout(binding = 3) writeonly buffer V { uint v_ch[]; };
 
+uniform float use_yuv444;
 
 vec3 color_at(uint x, uint y) {
   return imageLoad(input_image, ivec2(x, y)).rgb;
@@ -36,18 +37,33 @@ void main() {
   uint x = gl_GlobalInvocationID.x;
   uint y = gl_GlobalInvocationID.y;
 
-  if (x >= width || y >= size.y) {
+  if (x * 2 >= width || y >= size.y) {
     return;
   }
 
   uint inv_y = size.y - y;
 
-  ivec3 p0 = yuv_from_rgb(color_at(x * 4 + 0, inv_y));
-  ivec3 p1 = yuv_from_rgb(color_at(x * 4 + 1, inv_y));
-  ivec3 p2 = yuv_from_rgb(color_at(x * 4 + 2, inv_y));
-  ivec3 p3 = yuv_from_rgb(color_at(x * 4 + 3, inv_y));
+  ivec3 p0 = yuv_from_rgb(color_at(x * 8 + 0, inv_y));
+  ivec3 p1 = yuv_from_rgb(color_at(x * 8 + 1, inv_y));
+  ivec3 p2 = yuv_from_rgb(color_at(x * 8 + 2, inv_y));
+  ivec3 p3 = yuv_from_rgb(color_at(x * 8 + 3, inv_y));
+  ivec3 p4 = yuv_from_rgb(color_at(x * 8 + 4, inv_y));
+  ivec3 p5 = yuv_from_rgb(color_at(x * 8 + 5, inv_y));
+  ivec3 p6 = yuv_from_rgb(color_at(x * 8 + 6, inv_y));
+  ivec3 p7 = yuv_from_rgb(color_at(x * 8 + 7, inv_y));
+  y_ch[x * 2 + y * width] = pack_4(ivec4(p0.x, p1.x, p2.x, p3.x));
+  y_ch[x * 2 + 1 + y * width] = pack_4(ivec4(p4.x, p5.x, p6.x, p7.x));
 
-  y_ch[x + y * width] = pack_4(ivec4(p0.x, p1.x, p2.x, p3.x));
-  u_ch[x + y * width] = pack_4(ivec4(p0.y, p1.y, p2.y, p3.y));
-  v_ch[x + y * width] = pack_4(ivec4(p0.z, p1.z, p2.z, p3.z));
+  if (use_yuv444 == 1f) {
+    u_ch[x * 2 + y * width] = pack_4(ivec4(p0.y, p1.y, p2.y, p3.y));
+    u_ch[x * 2 + 1 + y * width] = pack_4(ivec4(p4.y, p5.y, p6.y, p7.y));
+
+    v_ch[x * 2 + y * width] = pack_4(ivec4(p0.z, p1.z, p2.z, p3.z));
+    v_ch[x * 2 + 1 + y * width] = pack_4(ivec4(p4.z, p5.z, p6.z, p7.z));
+  } else {
+    if (y % 2 == 0) {
+      u_ch[x + (y / 2) * (width / 2)] = pack_4(ivec4(p0.y, p2.y, p4.y, p6.y));
+      v_ch[x + (y / 2) * (width / 2)] = pack_4(ivec4(p0.z, p2.z, p4.z, p6.z));
+    }
+  }
 }

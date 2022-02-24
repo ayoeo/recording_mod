@@ -1655,7 +1655,7 @@ public class NetHandlerReplayClient extends NetHandlerPlayClient {
         scoreboard.removeTeam(scoreplayerteam);
       }
     } catch (Exception ignored) {
-      ignored.printStackTrace();
+//      ignored.printStackTrace();
     }
   }
 

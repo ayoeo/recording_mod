@@ -98,6 +98,7 @@ sealed class GuiInputEvent {
     override fun process() {
       val screen = mc.currentScreen as GuiScreenAccessor?
       if (screen != null) {
+//        println("Mouse click: $this") // TODO - force keybinds to be the same as they wereeeeee
         screen.setEventButton(this.mouseButton)
         (screen as GuiScreenAccessor?)?.invokeMouseClicked(
           this.mouseX,

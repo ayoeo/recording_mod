@@ -428,6 +428,34 @@ class LiteModRecordingMod : LiteMod, Tickable, com.mumfrey.liteloader.Configurab
   @SerializedName("seven_zip_path")
   var sevenZipPath = "C:/Program Files/7-Zip"
 
+  @Expose
+  @SerializedName("rendering_width")
+  var renderingWidth = 1920
+
+  @Expose
+  @SerializedName("rendering_height")
+  var renderingHeight = 1080
+
+  @Expose
+  @SerializedName("rendering_fps")
+  var renderingFps = 60
+
+  @Expose
+  @SerializedName("blend_factor")
+  var blendFactor = 10
+
+  @Expose
+  @SerializedName("use_yuv444")
+  var useYuv444 = true
+
+  @Expose
+  @SerializedName("proxy_rendering_width")
+  var proxyRenderingWidth = 1920
+
+  @Expose
+  @SerializedName("proxy_rendering_height")
+  var proxyRenderingHeight = 1080
+
   val codeFast = KeyBinding("codecodecodefast", Keyboard.KEY_L, "recording");
 
   override fun upgradeSettings(v: String?, c: File?, o: File?) {}
@@ -615,6 +643,7 @@ fun checkKeybinds(): Boolean {
       }
 
       Keyboard.KEY_P -> {
+        Renderer.finishRender()
         mc.loadWorld(null)
         activeReplay = null
         ReplayState.currentGuiState = null

@@ -1,6 +1,7 @@
 package me.aris.recordingmod
 
 import com.mumfrey.liteloader.gl.GL
+import me.aris.recordingmod.mixins.MinecraftAccessor
 import net.minecraft.client.Minecraft
 import net.minecraft.client.renderer.GlStateManager
 import net.minecraft.client.renderer.OpenGlHelper
@@ -27,11 +28,26 @@ external fun startEncode(
   vA: Long,
   yB: Long,
   uB: Long,
-  vB: Long
+  vB: Long,
+  useYuv444: Boolean
 )
 
 external fun sendFrame(useBufferB: Boolean)
 external fun finishEncode()
+
+sealed class GLUniform(val index: Int) {
+  class Float(index: Int) : GLUniform(index) {
+    fun set(value: kotlin.Float) {
+      GL20.glUniform1f(this.index, value)
+    }
+  }
+
+  class Vec2(index: Int) : GLUniform(index) {
+    fun set(x: kotlin.Float, y: kotlin.Float) {
+      GL20.glUniform2f(this.index, x, y)
+    }
+  }
+}
 
 class MappedBuffer(bufferSize: Long) {
   private val name = OpenGlHelper.glGenBuffers()
@@ -64,13 +80,37 @@ class MappedBuffer(bufferSize: Long) {
 }
 
 class DoubleBufferedChannels(size: Long) {
-  val yChannelA = MappedBuffer(size)
-  private val uChannelA = MappedBuffer(size)
-  private val vChannelA = MappedBuffer(size)
+  private val yChannelA = MappedBuffer(size)
+  private val uChannelA = MappedBuffer(
+    if (LiteModRecordingMod.mod.useYuv444) {
+      size
+    } else {
+      size / 4
+    }
+  )
+  private val vChannelA = MappedBuffer(
+    if (LiteModRecordingMod.mod.useYuv444) {
+      size
+    } else {
+      size / 4
+    }
+  )
 
   private val yChannelB = MappedBuffer(size)
-  private val uChannelB = MappedBuffer(size)
-  private val vChannelB = MappedBuffer(size)
+  private val uChannelB = MappedBuffer(
+    if (LiteModRecordingMod.mod.useYuv444) {
+      size
+    } else {
+      size / 4
+    }
+  )
+  private val vChannelB = MappedBuffer(
+    if (LiteModRecordingMod.mod.useYuv444) {
+      size
+    } else {
+      size / 4
+    }
+  )
 
   var useBufferB = false
 
@@ -130,6 +170,7 @@ class DoubleBufferedChannels(size: Long) {
   }
 }
 
+// TODO - the renderingFps is good
 class RendererState(val file: String, val renderingFps: Int, val videoFps: Int) {
   val initialSystemTime = Minecraft.getSystemTime()
   var encodeThread: Thread? = null
@@ -137,9 +178,12 @@ class RendererState(val file: String, val renderingFps: Int, val videoFps: Int) 
   var frameIndex = 0
 
   fun checkFinished() {
+//    mc.javaClass.classLoader.loadClass("Shaders")
+//    Class.forName()
     val framesPerTick = renderingFps / 20.0
     if (this.frameIndex >= (Renderer.endTick - Renderer.startTick) * framesPerTick) {
       println("Done rendering: $frameIndex, $framesPerTick")
+      System.currentTimeMillis()
       Renderer.finishRender()
     }
   }
@@ -182,6 +226,10 @@ val convertProgram = run {
   program
 }
 
+val useYuv444Uniform = GLUniform.Float(
+  OpenGlHelper.glGetUniformLocation(convertProgram, "use_yuv444")
+)
+
 object Renderer {
   init {
 //    val dll = File("librecording_mod_native.so")
@@ -194,9 +242,45 @@ object Renderer {
     }
   }
 
+  val lastSystemTimeField = run {
+    try {
+      val shadersClass = Class.forName("net.optifine.shaders.Shaders")
+      val field = shadersClass.getDeclaredField("lastSystemTime")
+      field.isAccessible = true
+      field
+    } catch (e: Exception) {
+      // No optifine I guess L
+      null
+    }
+  }
+
+  val frameTimeField = run {
+    try {
+      val shadersClass = Class.forName("net.optifine.shaders.Shaders")
+      val field = shadersClass.getDeclaredField("frameTime")
+      field.isAccessible = true
+      field
+    } catch (e: Exception) {
+      // No optifine I guess L
+      null
+    }
+  }
+
+  val frameTimeCounterField = run {
+    try {
+      val shadersClass = Class.forName("net.optifine.shaders.Shaders")
+      val field = shadersClass.getDeclaredField("frameTimeCounter")
+      field.isAccessible = true
+      field
+    } catch (e: Exception) {
+      // No optifine I guess L
+      null
+    }
+  }
+
   // TODO - set these with keybinds
-  var startTick = 0
-  var endTick = 0
+  var startTick = 257660
+  var endTick = 257880
 
   val isRendering: Boolean
     get() = this.rendererState != null
@@ -208,14 +292,26 @@ object Renderer {
     this.finishRender()
     activeReplay?.skipTo(this.startTick)
 
+    // set it to the right size
+    (mc as MinecraftAccessor).invokeResize(
+      LiteModRecordingMod.mod.renderingWidth,
+      LiteModRecordingMod.mod.renderingHeight
+    )
+
 //    println("start encode: $startTick")
     // TODO - pass in more options determined by config (codec, frame size)
-    val frameBlendScale = 1 // TODO - set this in options
+
     // TODO - not 600 or do the blend and stuff haha and the speed is weird?
-    val state = RendererState("filement_woah.mp4", 60 * frameBlendScale, 60)
+    val state =
+      // TODO - make frameblendscale its own thing and the video fps is just like 60
+      RendererState(
+        "im_fine_im_the_recording_mod.mp4",
+        LiteModRecordingMod.mod.renderingFps * LiteModRecordingMod.mod.blendFactor,
+        LiteModRecordingMod.mod.renderingFps
+      )
     this.rendererState = state
 
-    val bufferaddr = state.yuvBuffers.yChannelA.data
+//    val bufferaddr = state.yuvBuffers.yChannelA.data
 //    println("bufferA: $bufferaddr")
 //    println("size: ${mc.displayWidth} ${mc.displayHeight}")
     val pointers = state.yuvBuffers.yuvPointers()
@@ -229,7 +325,8 @@ object Renderer {
       pointers[2],
       pointers[3],
       pointers[4],
-      pointers[5]
+      pointers[5],
+      LiteModRecordingMod.mod.useYuv444
     )
   }
 
@@ -252,6 +349,7 @@ object Renderer {
 
     //-------------------Compute shader stuff-------------------//
     OpenGlHelper.glUseProgram(convertProgram)
+    useYuv444Uniform.set(if (LiteModRecordingMod.mod.useYuv444) 1f else 0f)
 
     // Use mc's framebuffer as the input image
     GlStateManager.setActiveTexture(GL.GL_TEXTURE0)
@@ -270,7 +368,7 @@ object Renderer {
     state.yuvBuffers.bindBuffers()
 
     GL43.glDispatchCompute(
-      ceil(mc.displayWidth / 4.0 / 32.0).toInt(),
+      ceil(mc.displayWidth / 8.0 / 32.0).toInt(),
       ceil(mc.displayHeight / 32.0).toInt(),
       1
     )
@@ -345,9 +443,6 @@ object Renderer {
     if (state != null) {
       val framesPerTick = state.renderingFps / 20
       // Time for shaders and such
-      // TODO - this is broken...
-      //  does weird stuff and glitches out...
-      // TODO - turned off to monitor fps
       ReplayState.systemTime =
         state.initialSystemTime + ((state.frameIndex / framesPerTick.toFloat()) * 50).toLong()
     }

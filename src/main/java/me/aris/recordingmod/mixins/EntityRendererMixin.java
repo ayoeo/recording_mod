@@ -15,6 +15,9 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+
+import java.lang.reflect.Field;
 
 @Mixin(EntityRenderer.class)
 abstract class EntityRendererMixin {
@@ -45,17 +48,10 @@ abstract class EntityRendererMixin {
         Pair<Integer, Integer> xy = pos.getScaledXY();
         x = xy.getFirst();
         y = xy.getSecond();
-//        Mouse.setGrabbed(true);
-//        Mouse.setCursorPosition(x, y);
-//        Mouse.setGrabbed(false);
       } else {
         // Center it : )
-//        Mouse.setCursorPosition(Display.getWidth() / 2, Display.getHeight() / 2);
         x = Display.getWidth() / 2;
         y = Display.getHeight() / 2;
-
-        // HAHAHAHAHAHA LOOKING??
-        // TODO
       }
       final ScaledResolution scaledRes = new ScaledResolution(this.mc);
       int scaledWidth = scaledRes.getScaledWidth();
@@ -72,10 +68,8 @@ abstract class EntityRendererMixin {
   private void render(float partialTicks, long nanoTime, CallbackInfo ci) {
     if (Minecraft.getMinecraft().currentScreen == null && LiteModRecordingModKt.getActiveReplay() != null) {
       ReplayState.INSTANCE.updateCameraRotations(Minecraft.getMinecraft().getRenderPartialTicks());
-      return;
-    }
-
-    if (Recorder.INSTANCE.getRecording()) {
+      Renderer.INSTANCE.setSystemTime();
+    } else if (Recorder.INSTANCE.getRecording()) {
       float adjX = (float) Mouse.getX() / (float) Minecraft.getMinecraft().displayWidth;
       float adjY = (float) Mouse.getY() / (float) Minecraft.getMinecraft().displayHeight;
       Pair<Integer, Integer> previous = lastPosition;//cursorPositions.get(cursorPositions.size() - 1);
@@ -118,8 +112,36 @@ abstract class EntityRendererMixin {
     }
   }
 
+  private static float actualFrameTimeNotTheFakeOneThatOptifineThinksTheFrameTimeIs = 0f;
+
+  @Inject(at = @At("HEAD"), method = "isDrawBlockOutline")
+  private void onIsDrawBlockOutline(CallbackInfoReturnable<Boolean> cir) {
+    Field frameTimeField = Renderer.INSTANCE.getFrameTimeField();
+    Field frameTimeCounterField = Renderer.INSTANCE.getFrameTimeCounterField();
+    if (frameTimeField != null && frameTimeCounterField != null) {
+      try {
+        float frameTime = 1f / ((float) LiteModRecordingMod.mod.getBlendFactor() * LiteModRecordingMod.mod.getRenderingFps());
+        frameTimeField.setFloat(null, frameTime);
+
+        actualFrameTimeNotTheFakeOneThatOptifineThinksTheFrameTimeIs += frameTime;
+        actualFrameTimeNotTheFakeOneThatOptifineThinksTheFrameTimeIs %= 3600f;
+        frameTimeCounterField.setFloat(null, actualFrameTimeNotTheFakeOneThatOptifineThinksTheFrameTimeIs);
+      } catch (IllegalAccessException ignored) {
+      }
+    }
+  }
+
   @Inject(at = @At("TAIL"), method = "updateCameraAndRender")
   private void postRender(float partialTicks, long nanoTime, CallbackInfo ci) {
+    try {
+      Field field = Renderer.INSTANCE.getLastSystemTimeField();
+      Long systemTime = ReplayState.INSTANCE.getSystemTime();
+      if (field != null && systemTime != null) {
+        long frameTime = 1000L / ((long) LiteModRecordingMod.mod.getBlendFactor() * LiteModRecordingMod.mod.getRenderingFps());
+        field.setLong(null, System.currentTimeMillis() - frameTime); // easy get
+      }
+    } catch (IllegalAccessException ignored) {
+    }
     ReplayState.INSTANCE.setSystemTime(null);
   }
 }

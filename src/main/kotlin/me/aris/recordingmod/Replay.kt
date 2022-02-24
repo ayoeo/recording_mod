@@ -44,6 +44,7 @@ import java.nio.ByteBuffer
 import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.system.exitProcess
 import kotlin.system.measureNanoTime
 
 data class TimestampedRotation(val yaw: Float, val pitch: Float, var timestamp: Timestamp)
@@ -257,30 +258,22 @@ class Replay(private val replayFile: File) {
     return i
   }
 
-  // TODO - making this small makes it break? why does it all need to be in the buffer at once, does it skip packets for some reason? idk
-  private val maxBufferSize = 1024 * 1024 * 64
-  // RELATED TO THE SIZE OF TICKS??????? BUFFER???
+  private val maxBufferSize = 1024 * 1024 * 16
 
   private val replayFileBuffer: ByteBuffer = ByteBuffer.allocate(maxBufferSize)
   fun keepLoading(tickdex: Int = this.tickdex) {
     if (this.ticks != null && tickdex - this.loadedTickdex < this.ticks!!.size - 10 && tickdex - this.loadedTickdex >= 0) return
     if (this.ticks == null) {
-      this.ticks = MutableList(20 * 60 * 20) { null }
+      this.ticks = MutableList(20 * 60 * 5) { null }
     }
-//    println("Keep loading: ${tickdex - this.loadedTickdex}, ${tickdex}, ${this.loadedTickdex}")
-
-//    if (this.ticks.getOrNull(tickdex - loadedTickdex) != null) return
-//    println("ok we loadin: $tickdex")
-
     // move it up move it up now
     this.loadedTickdex = max(tickdex - 20, 0)
 
     val loadTime = measureNanoTime {
-      var startPosition = this.tickPositions[tickdex]
+      var startPosition = this.tickPositions[this.loadedTickdex]
       val fileSize = replayFile.length()
       var tickCount = 0
 
-//      println("starting at $startPosition")
       val raFile = RandomAccessFile(replayFile, "r")
       val fileChannel = raFile.channel
 
@@ -293,18 +286,16 @@ class Replay(private val replayFile: File) {
           val bittsts = fileChannel.read(replayFileBuffer, startPosition)
           replayFileBuffer.position(0)
           replayFileBuffer.limit(bittsts)
-//          println("read $bittsts from file")
 
           val buffer = PacketBuffer(Unpooled.wrappedBuffer(replayFileBuffer))
 
           while (true) {
-            // Check if we've reached the end of our buffer
-            if (buffer.readableBytes() <= 0 || tickdex + tickCount - loadedTickdex >= this.ticks!!.size) {
+            if (loadedTickdex + tickCount >= this.totalTicks) {
               break@fileChannels
             }
+
             // Check if we need to get another buffer
-            else if (fileSize - startPosition > maxBufferSize && buffer.readableBytes() <= 1024 * 1024 * 3) {
-//              println("MORELOADING we need a new buffer: ${buffer.readableBytes()} left to read. $startPosition - startpos, ${buffer.readerIndex()}")
+            if (fileSize - startPosition > maxBufferSize && buffer.readableBytes() <= 1024 * 1024 * 2 + 32) {
               startPosition += buffer.readerIndex()
               continue@fileChannels
             }
@@ -315,14 +306,15 @@ class Replay(private val replayFile: File) {
               clientEvent.loadFromBuffer(buffer)
 
               if (clientEvent is ClientEvent.TickEnd) {
-                if (tickdex + tickCount >= this.totalTicks) {
+                if (loadedTickdex + tickCount >= this.totalTicks || tickCount >= this.ticks!!.size) {
                   break@fileChannels
                 }
-                this.ticks!![tickdex + tickCount - loadedTickdex] =
+                this.ticks!![tickCount] =
                   ReplayTick(clientEvents.toList(), serverPackets.toList())
                 clientEvents.clear()
                 serverPackets.clear()
                 tickCount++
+
                 continue
               } else {
                 clientEvents.add(clientEvent)
@@ -335,20 +327,19 @@ class Replay(private val replayFile: File) {
             }
           }
         } catch (uhoh: Exception) {
+          println("horrible error")
           uhoh.printStackTrace()
-          break
+          exitProcess(-1)
         }
       }
       raFile.close()
     }
-//    this.ticks.subList(0, max(0, tickdex - 1)).replaceAll { null }
 
 //    println("Keep loading from ${tickdex}: ${loadTime / 1000000}ms")
   }
 
   init {
     val loadTime = measureNanoTime {
-
       var startPosition = 0L
       val fileSize = replayFile.length()
       var tickCount = 0
@@ -356,30 +347,24 @@ class Replay(private val replayFile: File) {
       val raFile = RandomAccessFile(replayFile, "r")
       val fileChannel = raFile.channel
 
+      this.tickPositions.add(0)
+
       fileChannels@ while (true) {
+        replayFileBuffer.clear()
         val bittsts = fileChannel.read(replayFileBuffer, startPosition)
         replayFileBuffer.position(0)
         replayFileBuffer.limit(bittsts)
-//        val bb =
-//          fileChannel.map(
-//            FileChannel.MapMode.READ_ONLY,
-//            startPosition,
-//            (fileChannel.size() - startPosition).coerceAtMost(maxBufferSize.toLong())
-//          )
 
         val buffer = PacketBuffer(Unpooled.wrappedBuffer(replayFileBuffer))
 
-        this.tickPositions.add(0)
         while (true) {
           // Check if we've reached the end of our buffer
           // TODO - why is reader index 0 what is it doing when reading
           if (buffer.readableBytes() <= 0) {
-//            println("no readable bytes hahahahhaha: ${buffer.readableBytes()}")
             break@fileChannels
           }
           // Check if we need to get another buffer
-          else if (fileSize - startPosition > maxBufferSize && buffer.readableBytes() <= 1024 * 1024 * 3) {
-//            println(" we need a new buffer: ${buffer.readableBytes()} left to read. $startPosition - startpos")
+          else if (fileSize - startPosition > maxBufferSize && buffer.readableBytes() <= 1024 * 1024 * 2 + 32) {
             startPosition += buffer.readerIndex()
             continue@fileChannels
           }
@@ -404,7 +389,6 @@ class Replay(private val replayFile: File) {
       raFile.close()
 
       this.totalTicks = tickCount
-//      println("ticks: $tickCount")
     }
 
     println("Total load time for ${replayFile.name}: ${loadTime / 1000000}ms")
@@ -664,6 +648,7 @@ class Replay(private val replayFile: File) {
   }
 
   fun skipTo(targetTick: Int) {
+    println("Skipping to: $targetTick")
     skipping = true
 
     mc.displayGuiScreen(GuiDownloadTerrain())

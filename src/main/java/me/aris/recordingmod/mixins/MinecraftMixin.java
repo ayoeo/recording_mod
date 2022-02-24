@@ -4,7 +4,10 @@ import kotlin.Pair;
 import me.aris.recordingmod.*;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.EntityPlayerSP;
-import net.minecraft.client.gui.*;
+import net.minecraft.client.gui.GuiIngame;
+import net.minecraft.client.gui.GuiMainMenu;
+import net.minecraft.client.gui.GuiMultiplayer;
+import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.settings.GameSettings;
 import net.minecraft.util.MouseHelper;
 import org.lwjgl.input.Keyboard;
@@ -62,11 +65,21 @@ abstract class MinecraftMixin {
     }
   }
 
-
-  @Inject(at = @At("HEAD"), method = "resize")
+  @Inject(at = @At("HEAD"), method = "resize", cancellable = true)
   private void onResize(CallbackInfo ci) {
-    if (Recorder.INSTANCE.getRecording()) {
+    if (Renderer.INSTANCE.isRendering()) {
+      displayWidth = LiteModRecordingMod.mod.getRenderingWidth();
+      displayHeight = LiteModRecordingMod.mod.getRenderingHeight();
+      ci.cancel();
+    } else if (Recorder.INSTANCE.getRecording()) {
       ClientEvent.writeClientEvent(ClientEvent.Resize.INSTANCE);
+    }
+  }
+
+  @Inject(at = @At("HEAD"), method = "updateFramebufferSize", cancellable = true)
+  private void updateFramebufferSize(CallbackInfo ci) {
+    if (Renderer.INSTANCE.isRendering()) {
+      ci.cancel();
     }
   }
 
@@ -86,13 +99,14 @@ abstract class MinecraftMixin {
 //        System.out.println("1080p: " + res.getScaledWidth() + ", " + res.getScaledHeight());
       }
 
+
       if (LiteModRecordingModKt.preGameLoop())
         ci.cancel();
     }
   }
 
-  @Inject(at = @At(value = "INVOKE", target = "Lnet/minecraft/client/Minecraft;updateDisplay()V", shift = At.Shift.AFTER), method = "runGameLoop")
-  private void postSwapBuffers(CallbackInfo ci) {
+  @Inject(at = @At(value = "INVOKE", target = "Lnet/minecraft/client/Minecraft;updateDisplay()V", shift = At.Shift.BEFORE), method = "runGameLoop")
+  private void preSwapBuffers(CallbackInfo ci) {
     if (Renderer.INSTANCE.isRendering()) {
       Renderer.INSTANCE.captureFrame();
     }
