@@ -110,6 +110,9 @@ abstract class MinecraftMixin {
     if (Renderer.INSTANCE.isRendering()) {
       Renderer.INSTANCE.captureFrame();
     }
+    if (Renderer.INSTANCE.isRendering()) {
+      Renderer.INSTANCE.drawOverlay();
+    }
   }
 
   @Inject(at = @At("HEAD"), method = "displayGuiScreen")

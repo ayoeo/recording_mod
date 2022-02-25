@@ -23,6 +23,7 @@
     "PlayerControllerMPMixin",
     "RenderGlobalMixin",
     "ScaledResolutionMixin",
+    "ShaderLoaderMixin",
     "SPacketMultiBlockChangeAccessor",
     "SPacketSpawnMobAccessor",
     "SPacketSpawnObjectAccessor",

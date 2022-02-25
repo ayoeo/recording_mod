@@ -445,7 +445,11 @@ class LiteModRecordingMod : LiteMod, Tickable, com.mumfrey.liteloader.Configurab
   var blendFactor = 10
 
   @Expose
-  @SerializedName("use_yuv444")
+  @SerializedName("blend_weight")
+  var blendWeight = 0.1f
+
+  //  @Expose
+//  @SerializedName("use_yuv444")
   var useYuv444 = true
 
   @Expose

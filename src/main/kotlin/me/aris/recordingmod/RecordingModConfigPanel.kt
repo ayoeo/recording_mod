@@ -15,6 +15,7 @@ class RecordingModConfigPanel : AbstractConfigPanel() {
   private lateinit var renderingHeight: ConfigTextField
   private lateinit var renderingFps: ConfigTextField
   private lateinit var blendFactor: ConfigTextField
+  private lateinit var blendWeight: ConfigTextField
   private lateinit var proxyRenderingWidth: ConfigTextField
   private lateinit var proxyRenderingHeight: ConfigTextField
 
@@ -25,6 +26,7 @@ class RecordingModConfigPanel : AbstractConfigPanel() {
     mod.renderingHeight = (this.renderingHeight.text.toIntOrNull() ?: mod.renderingHeight) / 8 * 8
     mod.renderingFps = (this.renderingFps.text.toIntOrNull() ?: mod.renderingFps)
     mod.blendFactor = (this.blendFactor.text.toIntOrNull() ?: mod.blendFactor)
+    mod.blendWeight = (this.blendWeight.text.toFloatOrNull() ?: mod.blendWeight)
     mod.proxyRenderingWidth =
       (this.proxyRenderingWidth.text.toIntOrNull() ?: mod.proxyRenderingWidth) / 8 * 8
     mod.proxyRenderingHeight =
@@ -95,16 +97,21 @@ class RecordingModConfigPanel : AbstractConfigPanel() {
       )
     this.proxyRenderingHeight.text = mod.proxyRenderingHeight.toString()
 
-    this.addControl(
-      GuiButton(
-        2,
-        0,
-        315,
-        "Use Yuv444: ${mod.useYuv444}"
-      )
-    ) {
-      mod.useYuv444 = !mod.useYuv444
-      it.displayString = "Use Yuv444: ${mod.useYuv444}"
-    }
+    this.addLabel(0, 0, 315, 0, 0, 0xFFFFFF, "Blend Weight")
+    this.blendWeight =
+      this.addTextField(4, mc.fontRenderer.getStringWidth("Blend Weight") + 10, 305, 300, 20)
+    this.blendWeight.text = mod.blendWeight.toString()
+
+//    this.addControl(
+//      GuiButton(
+//        2,
+//        0,
+//        315,
+//        "Use Yuv444: ${mod.useYuv444}"
+//      )
+//    ) {
+//      mod.useYuv444 = !mod.useYuv444
+//      it.displayString = "Use Yuv444: ${mod.useYuv444}"
+//    }
   }
 }
