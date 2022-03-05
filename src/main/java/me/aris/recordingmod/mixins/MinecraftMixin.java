@@ -10,7 +10,6 @@ import net.minecraft.client.gui.GuiMultiplayer;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.settings.GameSettings;
 import net.minecraft.util.MouseHelper;
-import org.lwjgl.input.Keyboard;
 import org.lwjgl.input.Mouse;
 import org.lwjgl.opengl.Display;
 import org.spongepowered.asm.mixin.Mixin;
@@ -76,30 +75,9 @@ abstract class MinecraftMixin {
     }
   }
 
-  @Inject(at = @At("HEAD"), method = "updateFramebufferSize", cancellable = true)
-  private void updateFramebufferSize(CallbackInfo ci) {
-    if (Renderer.INSTANCE.isRendering()) {
-      ci.cancel();
-    }
-  }
-
   @Inject(at = @At("HEAD"), method = "runGameLoop", cancellable = true)
   private void preGameLoop(CallbackInfo ci) {
     if (LiteModRecordingModKt.getActiveReplay() != null) {
-      if (Keyboard.isKeyDown(Keyboard.KEY_M)) {
-//      this.resize(2560, 1440);
-//        this.resize(3840, 2160);
-//      this.resize(7680, 4320);
-//      this.resize(640, 360);
-//        ScaledResolution res = new ScaledResolution(getMinecraft());
-//        System.out.println("360p: " + res.getScaledWidth() + ", " + res.getScaledHeight());
-      } else if (Keyboard.isKeyDown(Keyboard.KEY_N)) {
-//        this.resize(640, 360);
-//        ScaledResolution res = new ScaledResolution(getMinecraft());
-//        System.out.println("1080p: " + res.getScaledWidth() + ", " + res.getScaledHeight());
-      }
-
-
       if (LiteModRecordingModKt.preGameLoop())
         ci.cancel();
     }

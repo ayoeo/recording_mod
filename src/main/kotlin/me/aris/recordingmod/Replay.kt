@@ -1,8 +1,12 @@
 package me.aris.recordingmod
 
+import com.google.gson.Gson
+import com.google.gson.JsonObject
 import io.netty.buffer.Unpooled
+import me.aris.recordingmod.LiteModRecordingMod.Companion.mod
 import me.aris.recordingmod.PacketIDsLol.blockChangeID
 import me.aris.recordingmod.PacketIDsLol.bossBarID
+import me.aris.recordingmod.PacketIDsLol.chatID
 import me.aris.recordingmod.PacketIDsLol.chunkDataID
 import me.aris.recordingmod.PacketIDsLol.chunkUnloadID
 import me.aris.recordingmod.PacketIDsLol.customSoundID
@@ -27,6 +31,7 @@ import me.aris.recordingmod.PacketIDsLol.spawnPlayerID
 import me.aris.recordingmod.PacketIDsLol.teamsID
 import me.aris.recordingmod.PacketIDsLol.updateScore
 import me.aris.recordingmod.mixins.GuiContainerCreativeAccessor
+import me.aris.recordingmod.mixins.MinecraftAccessor
 import me.aris.recordingmod.mixins.SPacketMultiBlockChangeAccessor
 import net.minecraft.client.gui.GuiDownloadTerrain
 import net.minecraft.client.gui.ScaledResolution
@@ -36,6 +41,8 @@ import net.minecraft.network.PacketBuffer
 import net.minecraft.network.play.server.*
 import net.minecraft.scoreboard.Scoreboard
 import net.minecraft.util.math.MathHelper
+import net.minecraft.util.text.TextFormatting
+import net.minecraft.util.text.event.HoverEvent
 import org.lwjgl.input.Keyboard
 import java.io.File
 import java.io.InputStream
@@ -222,6 +229,155 @@ object ReplayState {
   var nextAbsoluteState: ClientEvent.Absolutes? = null
 }
 
+private val killRegex =
+  Regex("""((?:\[.*] )?(?:.* )?(?:.*)) was slain by ((?:\[.*] )?(?:.* )?(?:.*)) with .*.""")
+
+private val maxBufferSize = 1024 * 1024 * 16
+private val replayFileBuffer: ByteBuffer = ByteBuffer.allocate(maxBufferSize)
+fun createMarkers(replay: File) {
+  val name = replay.nameWithoutExtension
+  val recFile = File(mod.recordingPath, "$name.rec")
+  // clean it up now
+  val f = File(System.getProperty("java.io.tmpdir"), "uncompressed_recordings")
+  f.mkdirs()
+
+  val uncompressedRecording = File(f, name)
+  if (!uncompressedRecording.exists()) {
+    f.listFiles()?.forEach { it.delete() }
+    val exename = "\"${File(mod.sevenZipPath).absolutePath}\""
+
+    val proc = Runtime.getRuntime()
+      .exec(
+        "$exename x \"${recFile.absolutePath}\"",
+        arrayOf(),
+        f
+      )
+    proc.waitFor()
+  }
+  val replay = File(f, name)
+
+  val raFile = RandomAccessFile(replay, "r")
+  val fileChannel = raFile.channel
+  var startPosition = 0L
+  var tickCount = 0
+
+  fileChannels@ while (true) {
+    replayFileBuffer.clear()
+    val bittsts = fileChannel.read(replayFileBuffer, startPosition)
+    replayFileBuffer.position(0)
+    replayFileBuffer.limit(bittsts)
+    val fileSize = replay.length()
+
+    val buffer = PacketBuffer(Unpooled.wrappedBuffer(replayFileBuffer))
+
+    while (true) {
+      if (buffer.readableBytes() <= 0) {
+        break@fileChannels
+      } else if (fileSize - startPosition > maxBufferSize && buffer.readableBytes() <= 1024 * 1024 * 2 + 32) {
+        // Check if we need to get another buffer
+        startPosition += buffer.readerIndex()
+        continue@fileChannels
+      }
+
+      val i = buffer.readVarInt()
+      if (i < 0) {
+        val clientEvent = ClientEvent.eventFromId(i)
+        clientEvent.loadFromBuffer(buffer)
+
+        if (clientEvent is ClientEvent.TickEnd) {
+          tickCount++
+          continue
+        }
+      } else {
+        val size = buffer.readVarInt()
+        val bytes = ByteArray(size)
+        buffer.readBytes(bytes)
+
+        // TODO - check packet
+//          serverPackets.add()
+        if (i == chatID) {
+          val packItUpShipItSomewhereIdcWhereManAnywhere =
+            RawServerPacket(i, size, bytes).cookPacket()
+          packItUpShipItSomewhereIdcWhereManAnywhere as SPacketChat
+          val msg = packItUpShipItSomewhereIdcWhereManAnywhere.chatComponent
+          val txt = msg.unformattedText
+          val unformatted = TextFormatting.getTextWithoutFormattingCodes(txt)!!
+          if (txt.contains("dropped: SHOW")) {
+            val t = msg.siblings
+            t.filter {
+              it.unformattedComponentText.equals("SHOW")
+            }.forEach { component ->
+              val hover = component.style.hoverEvent
+              if (hover?.action == HoverEvent.Action.SHOW_ITEM) {
+                val jsonThing =
+                  Gson().fromJson(hover.value.unformattedComponentText, JsonObject::class.java)
+                val mcName = jsonThing["id"]?.asString
+                val tierColor =
+                  jsonThing["tag"].asJsonObject["display"].asJsonObject["Name"].asString[3]
+
+                // We don't want maps and dungeon fragments stay back
+                if (mcName == "minecraft:iron_nugget" || mcName == "minecraft:filled_map") return@forEach
+
+                val tier = when (tierColor) {
+                  'e' -> "t5"
+                  'd' -> "t4"
+                  'b' -> "t3"
+                  'a' -> "t2"
+                  'f' -> "t1"
+                  else -> "UNK"
+                }
+                val type = when (mcName) {
+                  "minecraft:bow" -> "bow"
+                  "minecraft:shield" -> "shield"
+                  else -> mcName?.split("_")?.get(1) ?: "UNK"
+                }
+                val rarity =
+                  jsonThing["tag"]
+                    .asJsonObject["display"]
+                    .asJsonObject["Lore"].asJsonArray
+                    .findLast { it.asString[4] == '§' }
+                    ?.asString?.substring(
+                      6
+                    ) ?: "UNK"
+
+                val markerName = "drop_${tier}_${rarity.toLowerCase()}_${type}"
+                makeMarker(replay, true, markerName, tickCount)
+                println("Found drop: $markerName")
+              }
+            }
+          } else if (killRegex.matches(unformatted)) {
+            val groups = killRegex.find(unformatted)!!.groups
+            val killed = groups[1]?.value
+            val killer = groups[2]?.value
+            val markerName = "$killer KILLED $killed"
+            makeMarker(replay, false, markerName, tickCount)
+            println("Death: $markerName")
+          }
+        }
+      }
+    }
+  }
+  raFile.close()
+}
+
+fun makeMarker(recordingFile: File, drop: Boolean, name: String, tickdex: Int) {
+  val recordingName = recordingFile.nameWithoutExtension
+  File(if (drop) "generated_markers/drops" else "generated_markers/pks").mkdirs()
+  var s = name.replace("[\\\\/:*?\"<>|]".toRegex(), "_");
+  while (File(
+      if (drop) "generated_markers/drops" else "generated_markers/pks",
+      "$s-$recordingName"
+    ).exists()
+  ) {
+    s += "_"
+  }
+
+  File(
+    if (drop) "generated_markers/drops" else "generated_markers/pks",
+    "$s-$recordingName"
+  ).writeText("$tickdex")
+}
+
 data class CameraRotationsAtTick(val cameraRotations: List<CameraRotation>, val tickdex: Int)
 
 class Replay(private val replayFile: File) {
@@ -259,8 +415,8 @@ class Replay(private val replayFile: File) {
   }
 
   private val maxBufferSize = 1024 * 1024 * 16
-
   private val replayFileBuffer: ByteBuffer = ByteBuffer.allocate(maxBufferSize)
+
   fun keepLoading(tickdex: Int = this.tickdex) {
     if (this.ticks != null && tickdex - this.loadedTickdex < this.ticks!!.size - 10 && tickdex - this.loadedTickdex >= 0) return
     if (this.ticks == null) {
@@ -269,71 +425,69 @@ class Replay(private val replayFile: File) {
     // move it up move it up now
     this.loadedTickdex = max(tickdex - 20, 0)
 
-    val loadTime = measureNanoTime {
-      var startPosition = this.tickPositions[this.loadedTickdex]
-      val fileSize = replayFile.length()
-      var tickCount = 0
+    var startPosition = this.tickPositions[this.loadedTickdex]
+    val fileSize = replayFile.length()
+    var tickCount = 0
 
-      val raFile = RandomAccessFile(replayFile, "r")
-      val fileChannel = raFile.channel
+    val raFile = RandomAccessFile(replayFile, "r")
+    val fileChannel = raFile.channel
 
-      val clientEvents = mutableListOf<ClientEvent>()
-      val serverPackets = mutableListOf<RawServerPacket>()
+    val clientEvents = mutableListOf<ClientEvent>()
+    val serverPackets = mutableListOf<RawServerPacket>()
 
-      fileChannels@ while (true) {
-        try {
-          replayFileBuffer.clear()
-          val bittsts = fileChannel.read(replayFileBuffer, startPosition)
-          replayFileBuffer.position(0)
-          replayFileBuffer.limit(bittsts)
+    fileChannels@ while (true) {
+      try {
+        replayFileBuffer.clear()
+        val bittsts = fileChannel.read(replayFileBuffer, startPosition)
+        replayFileBuffer.position(0)
+        replayFileBuffer.limit(bittsts)
 
-          val buffer = PacketBuffer(Unpooled.wrappedBuffer(replayFileBuffer))
+        val buffer = PacketBuffer(Unpooled.wrappedBuffer(replayFileBuffer))
 
-          while (true) {
-            if (loadedTickdex + tickCount >= this.totalTicks) {
-              break@fileChannels
-            }
-
-            // Check if we need to get another buffer
-            if (fileSize - startPosition > maxBufferSize && buffer.readableBytes() <= 1024 * 1024 * 2 + 32) {
-              startPosition += buffer.readerIndex()
-              continue@fileChannels
-            }
-
-            val i = buffer.readVarInt()
-            if (i < 0) {
-              val clientEvent = ClientEvent.eventFromId(i)
-              clientEvent.loadFromBuffer(buffer)
-
-              if (clientEvent is ClientEvent.TickEnd) {
-                if (loadedTickdex + tickCount >= this.totalTicks || tickCount >= this.ticks!!.size) {
-                  break@fileChannels
-                }
-                this.ticks!![tickCount] =
-                  ReplayTick(clientEvents.toList(), serverPackets.toList())
-                clientEvents.clear()
-                serverPackets.clear()
-                tickCount++
-
-                continue
-              } else {
-                clientEvents.add(clientEvent)
-              }
-            } else {
-              val size = buffer.readVarInt()
-              val bytes = ByteArray(size)
-              buffer.readBytes(bytes)
-              serverPackets.add(RawServerPacket(i, size, bytes))
-            }
+        while (true) {
+          if (loadedTickdex + tickCount >= this.totalTicks) {
+            break@fileChannels
           }
-        } catch (uhoh: Exception) {
-          println("horrible error")
-          uhoh.printStackTrace()
-          exitProcess(-1)
+
+          // Check if we need to get another buffer
+          if (fileSize - startPosition > maxBufferSize && buffer.readableBytes() <= 1024 * 1024 * 2 + 32) {
+            startPosition += buffer.readerIndex()
+            continue@fileChannels
+          }
+
+          val i = buffer.readVarInt()
+          if (i < 0) {
+            val clientEvent = ClientEvent.eventFromId(i)
+            clientEvent.loadFromBuffer(buffer)
+
+            if (clientEvent is ClientEvent.TickEnd) {
+              if (loadedTickdex + tickCount >= this.totalTicks || tickCount >= this.ticks!!.size) {
+                break@fileChannels
+              }
+              this.ticks!![tickCount] =
+                ReplayTick(clientEvents.toList(), serverPackets.toList())
+              clientEvents.clear()
+              serverPackets.clear()
+              tickCount++
+
+              continue
+            } else {
+              clientEvents.add(clientEvent)
+            }
+          } else {
+            val size = buffer.readVarInt()
+            val bytes = ByteArray(size)
+            buffer.readBytes(bytes)
+            serverPackets.add(RawServerPacket(i, size, bytes))
+          }
         }
+      } catch (uhoh: Exception) {
+        println("horrible error")
+        uhoh.printStackTrace()
+        exitProcess(-1)
       }
-      raFile.close()
     }
+    raFile.close()
 
 //    println("Keep loading from ${tickdex}: ${loadTime / 1000000}ms")
   }
@@ -747,6 +901,13 @@ class Replay(private val replayFile: File) {
     }
     skipping = false
     paused = wasPaused
+  }
+
+  fun moveOneTick() {
+    this.skipForward(1)
+    val newPartialTicks = 0f
+    (mc as MinecraftAccessor).timer.renderPartialTicks = newPartialTicks
+    (mc as MinecraftAccessor).timer.elapsedPartialTicks = newPartialTicks
   }
 
   fun skipForward(ticks: Int) {

@@ -215,7 +215,7 @@ class MarkerList(
   private val markers = mutableListOf<MarkerEntry>()
 
   override fun getListWidth(): Int {
-    return 150
+    return 240
   }
 
   init {
@@ -341,11 +341,19 @@ class RecordingsList(
     } else {
       println("Recording was already uncompressed we're good")
     }
-    println("playing $name")
-    mc.displayGuiScreen(GuiDownloadTerrain())
-    activeReplay = Replay(File(f, name))
-    activeReplay?.restart()
-    paused = false
+
+
+    println("doing that looking through chat and stuff")
+    val file = File(f, name)
+    createMarkers(file)
+
+    // TODO - idk
+
+//    println("playing $name")
+//    mc.displayGuiScreen(GuiDownloadTerrain())
+//    activeReplay = Replay(File(f, name))
+//    activeReplay?.restart()
+//    paused = false
 //    println("clicked on $n")
   }
 
@@ -559,16 +567,7 @@ fun checkKeybinds(): Boolean {
       Keyboard.KEY_A -> {
         // SKIP MOMENT SKIPMENT
         LittleTestPerformanceTrackerThing.resetTimings()
-        activeReplay?.skipBackwards(20 * 10)
-        LittleTestPerformanceTrackerThing.printTimings()
-        println("Skipping back 10 seconds...")
-        return true
-      }
-
-      Keyboard.KEY_Q -> {
-        // SKIP MOMENT SKIPMENT
-        LittleTestPerformanceTrackerThing.resetTimings()
-        activeReplay?.skipBackwards(20 * 30)
+        activeReplay?.skipBackwards(20 * 5)
         LittleTestPerformanceTrackerThing.printTimings()
         println("Skipping back 30 seconds...")
         return true
@@ -579,7 +578,14 @@ fun checkKeybinds(): Boolean {
         LittleTestPerformanceTrackerThing.resetTimings()
         activeReplay?.skipBackwards(20 * 60 * 10)
         LittleTestPerformanceTrackerThing.printTimings()
-        println("Skipping back 10 minutes...")
+        return true
+      }
+
+      Keyboard.KEY_X -> {
+        // SKIP MOMENT SKIPMENT
+        LittleTestPerformanceTrackerThing.resetTimings()
+        activeReplay?.skipForward(20 * 60 * 10)
+        LittleTestPerformanceTrackerThing.printTimings()
         return true
       }
 
@@ -587,62 +593,82 @@ fun checkKeybinds(): Boolean {
         Renderer.startRender()
       }
 
-      Keyboard.KEY_S -> {
+      Keyboard.KEY_Q -> {
+        Renderer.sloMoStartTick = activeReplay?.tickdex ?: 0
+      }
+
+      Keyboard.KEY_W -> {
+        Renderer.sloMoEndTick = activeReplay?.tickdex ?: 0
+      }
+
+      Keyboard.KEY_PERIOD -> {
+        // forward one frame
+        activeReplay?.moveOneTick()
+      }
+
+      Keyboard.KEY_2 -> {
+        Renderer.makeSlowMoArea(2)
+      }
+
+      Keyboard.KEY_3 -> {
+        Renderer.makeSlowMoArea(3)
+      }
+
+      Keyboard.KEY_4 -> {
+        Renderer.makeSlowMoArea(4)
+      }
+
+      Keyboard.KEY_5 -> {
+        Renderer.makeSlowMoArea(5)
+      }
+
+      Keyboard.KEY_6 -> {
+        Renderer.makeSlowMoArea(6)
+      }
+      
+      Keyboard.KEY_7 -> {
+        Renderer.makeSlowMoArea(7)
+      }
+      
+      Keyboard.KEY_8 -> {
+        Renderer.makeSlowMoArea(8)
+      }
+
+      Keyboard.KEY_0 -> {
+        Renderer.sloMoRegions.clear()
+      }
+
+      Keyboard.KEY_I -> {
         Renderer.startTick = activeReplay?.tickdex ?: 0
       }
 
-      Keyboard.KEY_E -> {
+      Keyboard.KEY_O -> {
         Renderer.endTick = activeReplay?.tickdex ?: 0
       }
 
       Keyboard.KEY_F -> {
         // SKIP MOMENT SKIPMENT
         LittleTestPerformanceTrackerThing.resetTimings()
-        activeReplay?.skipForward(20 * 60 * 5)
+        activeReplay?.skipBackwards(20 * 30)
         LittleTestPerformanceTrackerThing.printTimings()
-
-        println("Skipping 5 minutes...")
-
         return true
       }
 
       Keyboard.KEY_G -> {
         // SKIP MOMENT SKIPMENT
         LittleTestPerformanceTrackerThing.resetTimings()
-        activeReplay?.skipForward(20 * 60 * 60)
+        activeReplay?.skipForward(20 * 30)
         LittleTestPerformanceTrackerThing.printTimings()
-
-        println("Skipping 5 minutes...")
-
-//        SevenZFile.
         return true
       }
 
       Keyboard.KEY_D -> {
         // SKIP MOMENT SKIPMENT
         LittleTestPerformanceTrackerThing.resetTimings()
-        activeReplay?.skipForward(20 * 2)
-        println("we're at $tickdex")
+        activeReplay?.skipForward(20 * 5)
+//        println("we're at $tickdex")
         LittleTestPerformanceTrackerThing.printTimings()
-        println("Skipping 10 seconds...")
-        return true
-      }
-
-      Keyboard.KEY_O -> {
-        // SKIP MOMENT SKIPMENT
-        LittleTestPerformanceTrackerThing.resetTimings()
-//        activeReplay?.restart()
-//        activeReplay?.skipTo(149706) // 162 // breaks chunk stuff - 1_16_08_16_56
-
-//        activeReplay?.skipTo(180600) //   01_11_00_10_01 hla helmet horse weird thing
-        activeReplay?.skipTo(179680) //   t2 fight haha 12_17_20_47_39
-//        activeReplay?.skipTo(236000) //   01_04_04_50_58 hla riph stronghold avalon
-//        activeReplay?.skipTo(67794) // 162  idk maybe broken players?? (THICKMENT THICK SO THICK)
-//        activeReplay?.skipTo(334893) // 162  idk maybe broken players??
-//        activeReplay?.skipTo(125420) // 162 // breaks chunk stuff (THICKMENT THICKMENT SO THICK)
-//        activeReplay?.skipTo(367287) // 162 // thickment
-        LittleTestPerformanceTrackerThing.printTimings()
-        println("SKIPPING TO THAT ONE PLACE YOU LIKE")
+        println("Skipping 5 seconds...")
         return true
       }
 

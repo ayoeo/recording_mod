@@ -352,7 +352,7 @@ sealed class ClientEvent {
       -7 -> GuiState()
       -8 -> Resize
 
-      else -> TODO("Idk handle fucked up data or something")
+      else -> throw java.lang.Exception("Something's gone wrong")
     }
   }
 

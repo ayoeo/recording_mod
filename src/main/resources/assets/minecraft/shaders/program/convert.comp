@@ -15,13 +15,24 @@ vec3 color_at(uint x, uint y) {
   return imageLoad(input_image, ivec2(x, y)).rgb;
 }
 
+//ivec3 yuv_from_rgb(vec3 rgb) {
+//  float r = rgb.r * 255;
+//  float g = rgb.g * 255;
+//  float b = rgb.b * 255;
+//  float y = 0.299 * r + 0.587 * g + 0.114 * b;
+//  float u = -0.169 * r - 0.331 * g + 0.500 * b + 128;
+//  float v = 0.500 * r - 0.419 * g - 0.081 * b + 128;
+//  return ivec3(y, u, v);
+//}
+
+
 ivec3 yuv_from_rgb(vec3 rgb) {
-  float r = rgb.r * 255;
-  float g = rgb.g * 255;
-  float b = rgb.b * 255;
-  float y = 0.299 * r + 0.587 * g + 0.114 * b;
-  float u = -0.169 * r - 0.331 * g + 0.500 * b + 128;
-  float v = 0.500 * r - 0.419 * g - 0.081 * b + 128;
+  uint r = uint(rgb.r * 255.0);
+  uint g = uint(rgb.g * 255.0);
+  uint b = uint(rgb.b * 255.0);
+  uint y = ((66 * r + 129 * g + 25 * b + 128) >> 8) + 16;
+  uint u = ((-38 * r - 74 * g + 112 * b + 128) >> 8) + 128;
+  uint v = ((112 * r - 94 * g - 18 * b + 128) >> 8) + 128;
   return ivec3(y, u, v);
 }
 

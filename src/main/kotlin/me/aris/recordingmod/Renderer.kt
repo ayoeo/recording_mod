@@ -2,7 +2,6 @@ package me.aris.recordingmod
 
 import com.mumfrey.liteloader.gl.GL.*
 import me.aris.recordingmod.Renderer.endTick
-import me.aris.recordingmod.Renderer.startTick
 import me.aris.recordingmod.mixins.MinecraftAccessor
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.Gui
@@ -11,7 +10,6 @@ import net.minecraft.client.renderer.OpenGlHelper
 import net.minecraft.client.renderer.Tessellator
 import net.minecraft.client.renderer.vertex.DefaultVertexFormats
 import net.minecraft.client.shader.Framebuffer
-import net.minecraft.client.shader.ShaderLoader
 import net.minecraft.client.util.JsonException
 import net.minecraft.util.ResourceLocation
 import org.apache.commons.io.IOUtils
@@ -46,12 +44,6 @@ sealed class GLUniform(val index: kotlin.Int) {
   class Float(index: kotlin.Int) : GLUniform(index) {
     fun set(value: kotlin.Float) {
       GL20.glUniform1f(this.index, value)
-    }
-  }
-
-  class Vec2(index: kotlin.Int) : GLUniform(index) {
-    fun set(x: kotlin.Float, y: kotlin.Float) {
-      GL20.glUniform2f(this.index, x, y)
     }
   }
 
@@ -196,8 +188,7 @@ class RendererState(
   var frameIndex = 0
 
   fun checkFinished() {
-    val framesPerTick = renderingFps / 20.0
-    if (this.frameIndex >= (endTick - startTick) * framesPerTick) {
+    if (activeReplay!!.tickdex >= endTick) {
       System.currentTimeMillis()
       Renderer.finishRender()
       paused = true
@@ -247,19 +238,6 @@ val accumProgram = run {
   program
 }
 
-val blendProgram = run {
-  val vert =
-    ShaderLoader.loadShader(mc.resourceManager, ShaderLoader.ShaderType.VERTEX, "frame_blend")
-  val frag =
-    ShaderLoader.loadShader(mc.resourceManager, ShaderLoader.ShaderType.FRAGMENT, "frame_blend")
-  val program = OpenGlHelper.glCreateProgram()
-  OpenGlHelper.glAttachShader(program, (vert as Shader).shader())
-  OpenGlHelper.glAttachShader(program, (frag as Shader).shader())
-  OpenGlHelper.glLinkProgram(program)
-
-  program
-}
-
 val convertProgram = run {
   val shader = loadComputeShader("convert.comp")
   val program = OpenGlHelper.glCreateProgram()
@@ -268,15 +246,6 @@ val convertProgram = run {
 
   program
 }
-
-//val convertProgram = run {
-//  val shader = loadComputeShader("convert.comp")
-//  val program = OpenGlHelper.glCreateProgram()
-//  OpenGlHelper.glAttachShader(program, shader)
-//  OpenGlHelper.glLinkProgram(program)
-//
-//  program
-//}
 
 val frameBlendFramebuffer = Framebuffer(mc.displayWidth, mc.displayHeight, false)
 
@@ -353,8 +322,18 @@ object Renderer {
   }
 
   // TODO - set these with keybinds
-  var startTick = 257660
-  var endTick = 257880
+  var startTick = 0
+  var endTick = 0
+
+  data class SloMoRegion(
+    val range: IntRange,
+    val slowMultiplier: Int
+  )
+
+  var sloMoRegions = mutableListOf<SloMoRegion>()
+
+  var sloMoStartTick = 0
+  var sloMoEndTick = 0
 
   val isRendering: Boolean
     get() = this.rendererState != null
@@ -364,6 +343,7 @@ object Renderer {
   fun startRender() {
     // Finish up just in case
     this.finishRender()
+    paused = false
     activeReplay?.skipTo(this.startTick)
 
     // set it to the right size
@@ -373,14 +353,11 @@ object Renderer {
     )
     frameBlendFramebuffer.createFramebuffer(mc.displayWidth, mc.displayHeight)
 
-    // TODO - pass in more options determined by config (codec, frame size)
-
-    val state =
-      RendererState(
-        "im_fine_im_the_recording_mod.mp4",
-        LiteModRecordingMod.mod.blendFactor,
-        LiteModRecordingMod.mod.renderingFps
-      )
+    val state = RendererState(
+      "im_fine_im_the_recording_mod.mp4",
+      LiteModRecordingMod.mod.blendFactor,
+      LiteModRecordingMod.mod.renderingFps
+    )
     this.rendererState = state
 
     val pointers = state.yuvBuffers.yuvPointers()
@@ -433,50 +410,12 @@ object Renderer {
       1
     )
 
-    // ENDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD
-//    val percentageThrough =
-//      ((state.frameIndex % state.blendFactor) + 1).toFloat() / state.blendFactor.toFloat()
-//    if (percentageThrough == 1f) {
-//      blendWeightUniform.set(0.5f)
-//    } else {
-//      blendWeightUniform.set(1f / state.blendFactor)
-//    }
-//    combinedTexUniform.set(0)
-//    newTexUniform.set(1)
-//    screenSizeUniform.set(
-//      LiteModRecordingMod.mod.renderingWidth.toFloat(),
-//      LiteModRecordingMod.mod.renderingHeight.toFloat()
-//    )
-
-//    OpenGlHelper.setActiveTexture(GL_TEXTURE0 + 0)
-//    glBindTexture(GL_TEXTURE_2D, frameBlendFramebuffer.framebufferTexture)
-//
-//    OpenGlHelper.setActiveTexture(GL_TEXTURE0 + 1)
-//    val currentTexture2 = glGetInteger(GL_TEXTURE_BINDING_2D)
-//    glBindTexture(GL_TEXTURE_2D, mc.framebuffer.framebufferTexture)
-//    renderTexturedRect(
-//      0,
-//      0,
-//      LiteModRecordingMod.mod.renderingWidth,
-//      LiteModRecordingMod.mod.renderingHeight
-//    )
-//    frameBlendFramebuffer.unbindFramebuffer()
-
-    // FIX
-//    glBindTexture(GL_TEXTURE_2D, currentTexture2)
-//    OpenGlHelper.setActiveTexture(GL_TEXTURE0 + 0)
-//    glBindTexture(GL_TEXTURE_2D, 0)
-//    OpenGlHelper.glUseProgram(0)
-    // FIX
-
     if ((state.frameIndex + 1) % state.blendFactor != 0 && state.blendFactor > 1) {
       // meh
       state.frameIndex++
       state.partialFrames++
       return
     }
-    println("Actually rendering this frame cuz its the last of the blendeds: ${state.frameIndex}")
-    // TODO - actually do the thing to the texture here, do it in compute shader??????? (maybe)
 
     // Compute shader moment
     OpenGlHelper.glUseProgram(accumProgram)
@@ -500,7 +439,7 @@ object Renderer {
       ceil(mc.displayHeight / 32.0).toInt(),
       1
     )
-
+    GL11.glFinish()
 
     state.encodeThread?.join()
     val shouldWrite: Boolean = state.yuvBuffers.waitForFence()
@@ -569,18 +508,6 @@ object Renderer {
     (mc as MinecraftAccessor).invokeResize(Display.getWidth(), Display.getHeight())
   }
 
-  fun pauseRender() {
-    // TODO - this is just like normal pause...
-
-    TODO("just stop advancing each frame")
-  }
-
-  fun unpauseRender() {
-    // TODO - this is also just like normal pause...
-
-    TODO("um... keep advancing each frame?")
-  }
-
   fun setSystemTime() {
     val state = this.rendererState
     if (state != null) {
@@ -591,12 +518,28 @@ object Renderer {
     }
   }
 
+  fun `slowItDown?`(current: Pair<Int, Float>): Int? {
+    return this.sloMoRegions.firstOrNull {
+      current.first in it.range
+    }?.slowMultiplier
+  }
+
+  var slowMultiplier = 1
+
   fun getTickData(): Pair<Int, Float> {
     val state = this.rendererState!!
-    val framesPerTick = state.renderingFps / 20
+    var framesPerTick = (state.renderingFps / 20) * slowMultiplier
 
     val elapsedTicks = if (state.partialFrames > framesPerTick) {
       state.partialFrames -= framesPerTick
+      val slowMaybeMultiplier =
+        `slowItDown?`(Pair(activeReplay!!.tickdex, state.partialFrames / framesPerTick.toFloat()))
+      if (slowMaybeMultiplier != null) {
+        slowMultiplier = slowMaybeMultiplier
+        framesPerTick *= slowMultiplier
+      } else {
+        slowMultiplier = 1
+      }
       1
     } else {
       0
@@ -675,6 +618,15 @@ object Renderer {
       ((Display.getWidth() / 2) / 3.0 - mc.fontRenderer.getStringWidth(progressText) / 2).toFloat(),
       (Display.getHeight() - borderH) / 3f + 3f,
       0xFFCCCCCC.toInt()
+    )
+  }
+
+  fun makeSlowMoArea(mult: Int) {
+    this.sloMoRegions.add(
+      SloMoRegion(
+        sloMoStartTick..sloMoEndTick,
+        mult
+      )
     )
   }
 }

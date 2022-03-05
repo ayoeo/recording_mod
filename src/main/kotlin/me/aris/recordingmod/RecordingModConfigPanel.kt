@@ -5,6 +5,7 @@ import com.mumfrey.liteloader.modconfig.AbstractConfigPanel
 import com.mumfrey.liteloader.modconfig.ConfigPanelHost
 import me.aris.recordingmod.LiteModRecordingMod.Companion.mod
 import net.minecraft.client.gui.GuiButton
+import java.io.File
 
 class RecordingModConfigPanel : AbstractConfigPanel() {
   override fun getPanelTitle() = "Recording Mod Config"
@@ -34,6 +35,20 @@ class RecordingModConfigPanel : AbstractConfigPanel() {
     LiteLoader.getInstance().writeConfig(mod)
   }
 
+  fun markAllFiles() {
+    File(mod.recordingPath)
+      .listFiles()
+      ?.filter { it.extension == "rec" }
+      ?.withIndex()?.forEach { (i, file) ->
+        try {
+          createMarkers(file)
+        } catch (e: Exception) {
+          println("Failed to generate markers for file: $file")
+          e.printStackTrace()
+        }
+      }
+  }
+
   override fun addOptions(host: ConfigPanelHost) {
     this.addControl(GuiButton(0, 0, 0, 65, 20, "Recordings")) {
       mc.displayGuiScreen(RecordingGui)
@@ -41,6 +56,10 @@ class RecordingModConfigPanel : AbstractConfigPanel() {
 
     this.addControl(GuiButton(1, 70, 0, 65, 20, "Markers")) {
       mc.displayGuiScreen(MarkerGui)
+    }
+
+    this.addControl(GuiButton(1, 140, 0, 65, 20, "Generate")) {
+      markAllFiles()
     }
 
     this.addLabel(0, 0, 45, 0, 0, 0xFFFFFF, "Recording Path")
