@@ -380,7 +380,7 @@ fun makeMarker(recordingFile: File, drop: Boolean, name: String, tickdex: Int) {
 
 data class CameraRotationsAtTick(val cameraRotations: List<CameraRotation>, val tickdex: Int)
 
-class Replay(private val replayFile: File) {
+class Replay(val replayFile: File) {
   var tickdex = 0
 
   var totalTicks = 0
@@ -801,11 +801,23 @@ class Replay(private val replayFile: File) {
 //    playUntil(targetTick)
   }
 
+  fun skipToRealSlow(targetTick: Int) {
+    println("Skipping real slow to: $targetTick")
+    skipping = true
+
+    mc.displayGuiScreen(GuiDownloadTerrain())
+    this.restart()
+
+    for (i in 0..targetTick) {
+      mc.runTick()
+    }
+  }
+
   fun skipTo(targetTick: Int) {
     println("Skipping to: $targetTick")
     skipping = true
 
-    mc.displayGuiScreen(GuiDownloadTerrain())
+//    mc.displayGuiScreen(GuiDownloadTerrain())
     this.restart()
 
     // Find last tickdex that contains a respawn packet

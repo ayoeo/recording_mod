@@ -67,8 +67,13 @@ abstract class MinecraftMixin {
   @Inject(at = @At("HEAD"), method = "resize", cancellable = true)
   private void onResize(CallbackInfo ci) {
     if (Renderer.INSTANCE.isRendering()) {
-      displayWidth = LiteModRecordingMod.mod.getRenderingWidth();
-      displayHeight = LiteModRecordingMod.mod.getRenderingHeight();
+      if (Renderer.INSTANCE.isProxy()) {
+        displayWidth = LiteModRecordingMod.mod.getProxyRenderingWidth();
+        displayHeight = LiteModRecordingMod.mod.getProxyRenderingHeight();
+      } else {
+        displayWidth = LiteModRecordingMod.mod.getRenderingWidth();
+        displayHeight = LiteModRecordingMod.mod.getRenderingHeight();
+      }
       ci.cancel();
     } else if (Recorder.INSTANCE.getRecording()) {
       ClientEvent.writeClientEvent(ClientEvent.Resize.INSTANCE);

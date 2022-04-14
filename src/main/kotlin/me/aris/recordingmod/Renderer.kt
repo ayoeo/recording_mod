@@ -1,6 +1,7 @@
 package me.aris.recordingmod
 
 import com.mumfrey.liteloader.gl.GL.*
+import me.aris.recordingmod.LiteModRecordingMod.Companion.mod
 import me.aris.recordingmod.Renderer.endTick
 import me.aris.recordingmod.mixins.MinecraftAccessor
 import net.minecraft.client.Minecraft
@@ -34,7 +35,7 @@ external fun startEncode(
   yB: Long,
   uB: Long,
   vB: Long,
-  useYuv444: Boolean
+  isProxy: Boolean
 ): Boolean
 
 external fun sendFrame(useBufferB: Boolean): Boolean
@@ -177,10 +178,17 @@ class DoubleBufferedChannels(size: Long) {
 
 // TODO - the renderingFps is good
 class RendererState(
+  val proxy: Boolean,
   val file: String,
-  val blendFactor: Int,
+  maybeTheBlendFactorWeDontKnow: Int,
   val videoFps: Int
 ) {
+  val blendFactor = if (proxy) {
+    1
+  } else {
+    maybeTheBlendFactorWeDontKnow
+  }
+
   val renderingFps = videoFps * blendFactor
   val initialSystemTime = Minecraft.getSystemTime()
   var encodeThread: Thread? = null
@@ -197,6 +205,7 @@ class RendererState(
 
   private val bufferSize = (mc.displayWidth * mc.displayHeight).toLong()
   val yuvBuffers = DoubleBufferedChannels(bufferSize)
+  var lolWeDropTheFirstFrame = true
   val accumBuffer = MappedBuffer((mc.displayWidth * mc.displayHeight * 16).toLong())
 }
 
@@ -338,23 +347,56 @@ object Renderer {
   val isRendering: Boolean
     get() = this.rendererState != null
 
+  val isProxy: Boolean
+    get() = this.rendererState?.proxy == true
+
   private var rendererState: RendererState? = null
 
-  fun startRender() {
+  fun startRender(proxy: Boolean) {
     // Finish up just in case
     this.finishRender()
     paused = false
+//    if (proxy) {
     activeReplay?.skipTo(this.startTick)
+//    } else {
+//      activeReplay?.skipToRealSlow(this.startTick)
+//    }
 
     // set it to the right size
-    (mc as MinecraftAccessor).invokeResize(
-      LiteModRecordingMod.mod.renderingWidth,
-      LiteModRecordingMod.mod.renderingHeight
-    )
+    if (proxy) {
+      (mc as MinecraftAccessor).invokeResize(
+        LiteModRecordingMod.mod.proxyRenderingWidth,
+        LiteModRecordingMod.mod.proxyRenderingHeight
+      )
+    } else {
+      (mc as MinecraftAccessor).invokeResize(
+        LiteModRecordingMod.mod.renderingWidth,
+        LiteModRecordingMod.mod.renderingHeight
+      )
+    }
     frameBlendFramebuffer.createFramebuffer(mc.displayWidth, mc.displayHeight)
+    val file = "$startTick-${activeReplay!!.replayFile.nameWithoutExtension}.mp4"
+    val filePath = if (proxy) {
+      "proxies/$file"
+    } else {
+      "${mod.finalRenderPath}/$file"
+    }
+    File(filePath).parentFile.mkdirs()
+    println("Rendering $filePath...")
+
+    if (proxy) {
+      val blueprint =
+        File("blueprints/$startTick..$endTick-${activeReplay!!.replayFile.nameWithoutExtension}.bp")
+      blueprint.parentFile.mkdirs()
+      blueprint.createNewFile()
+      sloMoRegions.forEach { region ->
+        blueprint.appendText("${region.range},${region.slowMultiplier}\r\n")
+      }
+    }
 
     val state = RendererState(
-      "im_fine_im_the_recording_mod.mp4",
+      proxy,
+      filePath,
       LiteModRecordingMod.mod.blendFactor,
       LiteModRecordingMod.mod.renderingFps
     )
@@ -363,7 +405,7 @@ object Renderer {
     val pointers = state.yuvBuffers.yuvPointers()
     if (!startEncode(
         state.file,
-        mc.displayWidth, // TODO - broken with non 16:9???
+        mc.displayWidth, // TODO - broken with non 16:9??? - oh who cares
         mc.displayHeight,
         state.videoFps,
         pointers[0],
@@ -372,7 +414,7 @@ object Renderer {
         pointers[3],
         pointers[4],
         pointers[5],
-        LiteModRecordingMod.mod.useYuv444
+        isProxy
       )
     ) {
       println("Failed to start encoding")
@@ -477,9 +519,13 @@ object Renderer {
     // TODO - stop buffer a from being written somehow
     if (shouldWrite) {
       state.encodeThread = Thread {
-        if (!sendFrame(!state.yuvBuffers.useBufferB)) {
-          finishRender()
-          return@Thread
+        if (state.lolWeDropTheFirstFrame) {
+          state.lolWeDropTheFirstFrame = false
+        } else {
+          if (!sendFrame(!state.yuvBuffers.useBufferB)) {
+            finishRender()
+            return@Thread
+          }
         }
       }
 
@@ -506,6 +552,8 @@ object Renderer {
 
     this.rendererState = null
     (mc as MinecraftAccessor).invokeResize(Display.getWidth(), Display.getHeight())
+//    if (isProxy) {
+//    }
   }
 
   fun setSystemTime() {

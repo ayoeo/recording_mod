@@ -342,18 +342,17 @@ class RecordingsList(
       println("Recording was already uncompressed we're good")
     }
 
-
-    println("doing that looking through chat and stuff")
-    val file = File(f, name)
-    createMarkers(file)
+//    println("doing that looking through chat and stuff")
+//    val file = File(f, name)
+//    createMarkers(file)
 
     // TODO - idk
 
-//    println("playing $name")
-//    mc.displayGuiScreen(GuiDownloadTerrain())
-//    activeReplay = Replay(File(f, name))
-//    activeReplay?.restart()
-//    paused = false
+    println("playing $name")
+    mc.displayGuiScreen(GuiDownloadTerrain())
+    activeReplay = Replay(File(f, name))
+    activeReplay?.restart()
+    paused = false
 //    println("clicked on $n")
   }
 
@@ -433,8 +432,12 @@ class LiteModRecordingMod : LiteMod, Tickable, com.mumfrey.liteloader.Configurab
   var recordingPath = "recordings"
 
   @Expose
+  @SerializedName("recording_path")
+  var finalRenderPath = "final"
+
+  @Expose
   @SerializedName("seven_zip_path")
-  var sevenZipPath = "C:/Program Files/7-Zip"
+  var sevenZipPath = "C:/Program Files/7-Zip/7z.exe"
 
   @Expose
   @SerializedName("rendering_width")
@@ -451,10 +454,6 @@ class LiteModRecordingMod : LiteMod, Tickable, com.mumfrey.liteloader.Configurab
   @Expose
   @SerializedName("blend_factor")
   var blendFactor = 10
-
-  @Expose
-  @SerializedName("blend_weight")
-  var blendWeight = 0.1f
 
   //  @Expose
 //  @SerializedName("use_yuv444")
@@ -590,7 +589,7 @@ fun checkKeybinds(): Boolean {
       }
 
       Keyboard.KEY_R -> {
-        Renderer.startRender()
+        Renderer.startRender(true)
       }
 
       Keyboard.KEY_Q -> {
@@ -625,11 +624,11 @@ fun checkKeybinds(): Boolean {
       Keyboard.KEY_6 -> {
         Renderer.makeSlowMoArea(6)
       }
-      
+
       Keyboard.KEY_7 -> {
         Renderer.makeSlowMoArea(7)
       }
-      
+
       Keyboard.KEY_8 -> {
         Renderer.makeSlowMoArea(8)
       }
