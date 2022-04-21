@@ -455,30 +455,34 @@ class Replay(val replayFile: File) {
             continue@fileChannels
           }
 
-          val i = buffer.readVarInt()
-          if (i < 0) {
-            val clientEvent = ClientEvent.eventFromId(i)
-            clientEvent.loadFromBuffer(buffer)
+          try {
+            val i = buffer.readVarInt()
+            if (i < 0) {
+              val clientEvent = ClientEvent.eventFromId(i)
+              clientEvent.loadFromBuffer(buffer)
 
-            if (clientEvent is ClientEvent.TickEnd) {
-              if (loadedTickdex + tickCount >= this.totalTicks || tickCount >= this.ticks!!.size) {
-                break@fileChannels
+              if (clientEvent is ClientEvent.TickEnd) {
+                if (loadedTickdex + tickCount >= this.totalTicks || tickCount >= this.ticks!!.size) {
+                  break@fileChannels
+                }
+                this.ticks!![tickCount] =
+                  ReplayTick(clientEvents.toList(), serverPackets.toList())
+                clientEvents.clear()
+                serverPackets.clear()
+                tickCount++
+
+                continue
+              } else {
+                clientEvents.add(clientEvent)
               }
-              this.ticks!![tickCount] =
-                ReplayTick(clientEvents.toList(), serverPackets.toList())
-              clientEvents.clear()
-              serverPackets.clear()
-              tickCount++
-
-              continue
             } else {
-              clientEvents.add(clientEvent)
+              val size = buffer.readVarInt()
+              val bytes = ByteArray(size)
+              buffer.readBytes(bytes)
+              serverPackets.add(RawServerPacket(i, size, bytes))
             }
-          } else {
-            val size = buffer.readVarInt()
-            val bytes = ByteArray(size)
-            buffer.readBytes(bytes)
-            serverPackets.add(RawServerPacket(i, size, bytes))
+          } catch (e: Exception) {
+            break@fileChannels
           }
         }
       } catch (uhoh: Exception) {
@@ -523,20 +527,26 @@ class Replay(val replayFile: File) {
             continue@fileChannels
           }
 
-          val i = buffer.readVarInt()
-          if (i < 0) {
-            val clientEvent = ClientEvent.eventFromId(i)
-            clientEvent.loadFromBuffer(buffer)
+          try {
+            val i = buffer.readVarInt()
+            if (i < 0) {
+              val clientEvent = ClientEvent.eventFromId(i)
+              clientEvent.loadFromBuffer(buffer)
 
-            if (clientEvent is ClientEvent.TickEnd) {
-              val filePos = startPosition + buffer.readerIndex()
-              this.tickPositions.add(filePos)
-              tickCount++
-              continue
+              if (clientEvent is ClientEvent.TickEnd) {
+                val filePos = startPosition + buffer.readerIndex()
+                this.tickPositions.add(filePos)
+                tickCount++
+                continue
+              }
+            } else {
+              val size = buffer.readVarInt()
+              buffer.skipBytes(size)
             }
-          } else {
-            val size = buffer.readVarInt()
-            buffer.skipBytes(size)
+          } catch (e: Exception) {
+            val filePos = startPosition + buffer.readerIndex()
+            println("This would've crashed before, but I fixed it: $filePos/$fileSize")
+            break@fileChannels
           }
         }
       }

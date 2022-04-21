@@ -27,7 +27,7 @@ abstract class PlayerControllerMPMixin {
   private void in(BlockPos itemstack1, CallbackInfoReturnable<Boolean> cir) {
     if (LiteModRecordingModKt.getActiveReplay() != null && LiteModRecordingModKt.getSkipping()) {
       // don't? break it?
-      System.out.println("don't break it? (DONT BREAK IT) " + itemstack1);
+//      System.out.println("don't break it? (DONT BREAK IT) " + itemstack1);
       cir.cancel();
     }
   }

@@ -2,8 +2,7 @@ package me.aris.recordingmod
 
 import com.google.gson.annotations.Expose
 import com.google.gson.annotations.SerializedName
-import com.mumfrey.liteloader.LiteMod
-import com.mumfrey.liteloader.Tickable
+import com.mumfrey.liteloader.*
 import com.mumfrey.liteloader.core.LiteLoader
 import com.mumfrey.liteloader.modconfig.ConfigPanel
 import com.mumfrey.liteloader.modconfig.ConfigStrategy
@@ -426,13 +425,14 @@ object MarkerGui : GuiScreen() {
 @ExposableOptions(
   strategy = ConfigStrategy.Unversioned, filename = "recording_mod.json", aggressive = true
 )
-class LiteModRecordingMod : LiteMod, Tickable, com.mumfrey.liteloader.Configurable {
+@Priority(2000)
+class LiteModRecordingMod : LiteMod, Tickable, HUDRenderListener, Configurable {
   @Expose
   @SerializedName("recording_path")
   var recordingPath = "recordings"
 
   @Expose
-  @SerializedName("recording_path")
+  @SerializedName("final_render_path")
   var finalRenderPath = "final"
 
   @Expose
@@ -494,6 +494,14 @@ class LiteModRecordingMod : LiteMod, Tickable, com.mumfrey.liteloader.Configurab
   init {
     mod = this
 
+  }
+
+  override fun onPreRenderHUD(screenWidth: Int, screenHeight: Int) {
+//    Renderer.setSystemTime()
+  }
+
+  override fun onPostRenderHUD(screenWidth: Int, screenHeight: Int) {
+//    ReplayState.systemTime = null
   }
 
   override fun onTick(

@@ -1,9 +1,7 @@
 package me.aris.recordingmod
 
 import com.mumfrey.liteloader.gl.GL.*
-import io.netty.buffer.ByteBuf
 import io.netty.buffer.Unpooled
-import me.aris.recordingmod.PacketIDsLol.chunkDataID
 import me.aris.recordingmod.PacketIDsLol.destroyEntityID
 import me.aris.recordingmod.PacketIDsLol.entityEquipment
 import me.aris.recordingmod.PacketIDsLol.entityMetadata
@@ -28,10 +26,7 @@ import net.minecraft.network.play.server.*
 import net.minecraft.util.ResourceLocation
 import net.minecraft.util.math.Vec3d
 import org.lwjgl.input.Keyboard
-import org.lwjgl.input.Mouse
 import java.nio.ByteBuffer
-import java.security.Key
-import kotlin.reflect.KParameter
 
 class RawServerPacket(val packetID: Int, val size: Int, val buffer: ByteArray) {
   fun cookPacket(): Packet<NetHandlerReplayClient> {
@@ -52,6 +47,7 @@ class ReplayTick(
   val serverPackets: List<RawServerPacket>
 ) {
   fun replayFull() {
+    mc.inGameHasFocus = true
     mc.player?.world = mc.world
 
     ReplayState.nextAbsoluteState?.runitbaby(false)
@@ -256,7 +252,6 @@ class ReplayTick(
 //      }
 
     // haha forgot this haha
-
     mc.inGameHasFocus = true
 
     // Keybindment
@@ -678,7 +673,11 @@ sealed class ClientEvent {
       if (this.ridingID != -1) {
         this.ridingYaw = buffer.readFloat()
         this.ridingPitch = buffer.readFloat()
+//        val ent = mc.world.getEntityByID(this.ridingID)
+        // TODO - FIX HORRIBLE BUG WITH MOUNTS
+//        if (ent is AbstractHorse) {
         this.ridingRearing = buffer.readBoolean()
+//        }
       }
       this.position = Vec3d(buffer.readDouble(), buffer.readDouble(), buffer.readDouble())
       this.motion = Vec3d(buffer.readDouble(), buffer.readDouble(), buffer.readDouble())

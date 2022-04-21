@@ -350,6 +350,7 @@ object Renderer {
   val isProxy: Boolean
     get() = this.rendererState?.proxy == true
 
+  @Volatile
   private var rendererState: RendererState? = null
 
   fun startRender(proxy: Boolean) {

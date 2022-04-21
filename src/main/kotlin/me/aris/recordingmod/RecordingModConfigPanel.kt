@@ -7,7 +7,9 @@ import me.aris.recordingmod.LiteModRecordingMod.Companion.mod
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.GuiButton
 import net.minecraft.client.gui.GuiDownloadTerrain
+import org.apache.commons.io.comparator.LastModifiedFileComparator
 import java.io.File
+import java.nio.charset.Charset
 
 class RecordingModConfigPanel : AbstractConfigPanel() {
   override fun getPanelTitle() = "Recording Mod Config"
@@ -24,7 +26,7 @@ class RecordingModConfigPanel : AbstractConfigPanel() {
 
   override fun onPanelHidden() {
     mod.recordingPath = this.recordingPath.text
-    mod.finalRenderPath = this.sevenZipPath.text
+    mod.finalRenderPath = this.finalRenderPath.text
     mod.sevenZipPath = this.sevenZipPath.text
     mod.renderingWidth = (this.renderingWidth.text.toIntOrNull() ?: mod.renderingWidth) / 8 * 8
     mod.renderingHeight = (this.renderingHeight.text.toIntOrNull() ?: mod.renderingHeight) / 8 * 8
@@ -38,6 +40,8 @@ class RecordingModConfigPanel : AbstractConfigPanel() {
   }
 
   private fun renderBlueprints(proxy: Boolean) {
+    mc.displayGuiScreen(GuiDownloadTerrain())
+
     Thread {
       File("blueprints")
         .listFiles()
@@ -71,6 +75,7 @@ class RecordingModConfigPanel : AbstractConfigPanel() {
           }
 
           println("rendering $name...")
+          var started = false
           Minecraft.getMinecraft().addScheduledTask {
             mc.displayGuiScreen(GuiDownloadTerrain())
             activeReplay = Replay(File(f, name))
@@ -88,13 +93,16 @@ class RecordingModConfigPanel : AbstractConfigPanel() {
             Renderer.endTick = endtickdex
             paused = false
             Renderer.startRender(proxy)
+            started = true
           }
-          Thread.sleep(10000)
 
-          while (Renderer.isRendering) {
-            Thread.sleep(100)
+          while (Renderer.isRendering || !started) {
+            Thread.sleep(10)
           }
+          println("Finished render...")
         }
+
+      println("Finished all blueprint renders")
     }.start()
   }
 
@@ -112,80 +120,112 @@ class RecordingModConfigPanel : AbstractConfigPanel() {
       }
   }
 
+  private fun generateBlueprintsFromMarkers() {
+    File("markers")
+      .listFiles()
+      ?.sortedWith(LastModifiedFileComparator())
+      ?.withIndex()?.forEach { (i, file) ->
+        val name = file.nameWithoutExtension
+        val split = name.split('-')
+        val recordingName = split.last()
+        val xxx = file.readText(Charset.defaultCharset()).toInt()
+        val start = xxx - 20 * 20
+        val end = xxx + 20 * 5
+        val blueprint =
+          File("blueprints/$start..$end-${recordingName}.bp")
+        blueprint.parentFile.mkdirs()
+        blueprint.createNewFile()
+      }
+  }
+
   override fun addOptions(host: ConfigPanelHost) {
-    this.addControl(GuiButton(0, 0, 0, 65, 20, "Recordings")) {
+    var x = 0
+    var y = 0
+    this.addControl(GuiButton(0, x, y, 65, 20, "Recordings")) {
       mc.displayGuiScreen(RecordingGui)
     }
 
-    this.addControl(GuiButton(1, 70, 0, 65, 20, "Markers")) {
+    x += 70
+    this.addControl(GuiButton(1, x, y, 65, 20, "Markers")) {
       mc.displayGuiScreen(MarkerGui)
     }
 
-    this.addControl(GuiButton(1, 250, 0, 105, 20, "Render Blueprint Proxies")) {
-      renderBlueprints(true)
-    }
-
-    this.addControl(GuiButton(1, 140, 0, 105, 20, "Render Blueprints")) {
+    x = 0
+    y += 25
+    this.addControl(GuiButton(1, x, y, 105, 20, "Render Blueprints")) {
       renderBlueprints(false)
     }
 
-    this.addControl(GuiButton(1, 380, 0, 65, 20, "Generate")) {
+    x += 110
+    this.addControl(GuiButton(1, x, y, 145, 20, "Render Blueprint Proxies")) {
+      renderBlueprints(true)
+    }
+
+    x = 0
+    y += 25
+    this.addControl(GuiButton(1, x, y, 65, 20, "Generate Markers")) {
       markAllFiles()
     }
 
-    var y = 45
-    this.addLabel(0, 0, y, 0, 0, 0xFFFFFF, "Recording Path")
+    x += 70
+    this.addControl(GuiButton(1, x, y, 180, 20, "Generate Blueprints From Markers")) {
+      generateBlueprintsFromMarkers()
+    }
+
+    x = 0
+    y += 45
+    this.addLabel(0, x, y, 0, 0, 0xFFFFFF, "Recording Path")
     this.recordingPath =
       this.addTextField(0, mc.fontRenderer.getStringWidth("Recording Path") + 10, y - 10, 300, 20)
     this.recordingPath.setMaxLength(1024)
     this.recordingPath.text = mod.recordingPath
 
     y += 35
-    this.addLabel(0, 0, y, 0, 0, 0xFFFFFF, "Final Render Path")
-    this.finalRenderPath =
-      this.addTextField(
-        0,
-        mc.fontRenderer.getStringWidth("Final Render Path") + 10,
-        y - 10,
-        300,
-        20
-      )
+    this.addLabel(0, x, y, 0, 0, 0xFFFFFF, "Final Render Path")
+    this.finalRenderPath = this.addTextField(
+      0,
+      mc.fontRenderer.getStringWidth("Final Render Path") + 10,
+      y - 10,
+      300,
+      20
+    )
     this.finalRenderPath.setMaxLength(1024)
     this.finalRenderPath.text = mod.finalRenderPath
 
     y += 35
-    this.addLabel(0, 0, y, 0, 0, 0xFFFFFF, "7-Zip Path")
-    this.sevenZipPath =
-      this.addTextField(1, mc.fontRenderer.getStringWidth("7-Zip Path") + 10, y - 10, 300, 20)
+    this.addLabel(0, x, y, 0, 0, 0xFFFFFF, "7-Zip Path")
+    this.sevenZipPath = this.addTextField(
+      1, mc.fontRenderer.getStringWidth("7-Zip Path") + 10, y - 10, 300, 20
+    )
     this.sevenZipPath.setMaxLength(1024)
     this.sevenZipPath.text = mod.sevenZipPath
 
     y += 35
-    this.addLabel(0, 0, y, 0, 0, 0xFFFFFF, "Rendering Width")
+    this.addLabel(0, x, y, 0, 0, 0xFFFFFF, "Rendering Width")
     this.renderingWidth =
       this.addTextField(2, mc.fontRenderer.getStringWidth("Rendering Width") + 10, y - 10, 300, 20)
     this.renderingWidth.text = mod.renderingWidth.toString()
 
     y += 35
-    this.addLabel(0, 0, y, 0, 0, 0xFFFFFF, "Rendering Height")
+    this.addLabel(0, x, y, 0, 0, 0xFFFFFF, "Rendering Height")
     this.renderingHeight =
       this.addTextField(3, mc.fontRenderer.getStringWidth("Rendering Hieght") + 10, y - 10, 300, 20)
     this.renderingHeight.text = mod.renderingHeight.toString()
 
     y += 35
-    this.addLabel(0, 0, y, 0, 0, 0xFFFFFF, "Rendering Fps")
+    this.addLabel(0, x, y, 0, 0, 0xFFFFFF, "Rendering Fps")
     this.renderingFps =
       this.addTextField(3, mc.fontRenderer.getStringWidth("Rendering Fps") + 10, y - 10, 300, 20)
     this.renderingFps.text = mod.renderingFps.toString()
 
     y += 35
-    this.addLabel(0, 0, y, 0, 0, 0xFFFFFF, "Blend Factor")
+    this.addLabel(0, x, y, 0, 0, 0xFFFFFF, "Blend Factor")
     this.blendFactor =
       this.addTextField(4, mc.fontRenderer.getStringWidth("Blend Factor") + 10, y - 10, 300, 20)
     this.blendFactor.text = mod.blendFactor.toString()
 
     y += 35
-    this.addLabel(0, 0, y, 0, 0, 0xFFFFFF, "Proxy Rendering Width")
+    this.addLabel(0, x, y, 0, 0, 0xFFFFFF, "Proxy Rendering Width")
     this.proxyRenderingWidth =
       this.addTextField(
         5,
@@ -197,7 +237,7 @@ class RecordingModConfigPanel : AbstractConfigPanel() {
     this.proxyRenderingWidth.text = mod.proxyRenderingWidth.toString()
 
     y += 35
-    this.addLabel(0, 0, y, 0, 0, 0xFFFFFF, "Proxy Rendering Height")
+    this.addLabel(0, x, y, 0, 0, 0xFFFFFF, "Proxy Rendering Height")
     this.proxyRenderingHeight =
       this.addTextField(
         6,
