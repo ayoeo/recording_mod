@@ -257,15 +257,11 @@ class MarkerList(
     val uncompressedRecording = File(f, name)
     if (!uncompressedRecording.exists()) {
       f.listFiles()?.forEach { it.delete() }
-//      val os = System.getProperty("os.name").toLowerCase()
-      val exename = "\"${File(mod.sevenZipPath).absolutePath}\""
 
-      val proc = Runtime.getRuntime()
-        .exec(
-          "$exename x \"${recFile.absolutePath}\"",
-          arrayOf(),
-          f
-        )
+      val exename = File(mod.sevenZipPath).absolutePath
+      val pb = ProcessBuilder(exename, "x", recFile.absolutePath)
+      pb.directory(f)
+      val proc = pb.start()
       proc.waitFor()
     } else {
       println("Recording was already uncompressed we're good")
@@ -327,16 +323,17 @@ class RecordingsList(
     val uncompressedRecording = File(f, name)
     if (!uncompressedRecording.exists()) {
       f.listFiles()?.forEach { it.delete() }
-//      val os = System.getProperty("os.name").toLowerCase()
-      val exename = "\"${File(mod.sevenZipPath).absolutePath}\""
-
-      val proc = Runtime.getRuntime()
-        .exec(
-          "$exename x \"${recFile.absolutePath}\"",
-          arrayOf(),
-          f
-        )
-      proc.waitFor()
+      val exename = File(mod.sevenZipPath).absolutePath
+      val pb = ProcessBuilder(exename, "x", recFile.absolutePath)
+      pb.directory(f)
+      pb.redirectOutput()
+      pb.redirectError()
+      val proc = pb.start()
+      val result = proc.waitFor()
+      if (result != 0) {
+        System.err.println("Could not uncompress recording: ${recFile.name} ($result)")
+        return
+      }
     } else {
       println("Recording was already uncompressed we're good")
     }

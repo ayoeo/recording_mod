@@ -15,6 +15,7 @@ import net.minecraft.client.util.JsonException
 import net.minecraft.util.ResourceLocation
 import org.apache.commons.io.IOUtils
 import org.apache.commons.lang3.StringUtils
+import org.apache.commons.lang3.SystemUtils
 import org.lwjgl.BufferUtils
 import org.lwjgl.opengl.*
 import sun.nio.ch.DirectBuffer
@@ -285,12 +286,14 @@ val firstFrameUniform = GLUniform.Int(
 object Renderer {
   init {
 //    val dll = File("librecording_mod_native.so")
-    val os = System.getProperty("os.name").toLowerCase()
-    if (os.contains("windows")) {
+//    val os = System.getProperty("os.name").toLowerCase()
+    if (SystemUtils.IS_OS_WINDOWS) {
       val dll = File("recording_mod_native.dll")
       System.load(dll.absolutePath)
-    } else {
+    } else if (SystemUtils.IS_OS_LINUX) {
       // idk mac stuff do later lol
+      val dll = File("librecording_mod_native.so")
+      System.load(dll.absolutePath)
     }
   }
 

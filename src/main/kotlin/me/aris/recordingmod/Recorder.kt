@@ -3,7 +3,6 @@ package me.aris.recordingmod
 import io.netty.buffer.ByteBuf
 import io.netty.buffer.Unpooled
 import me.aris.recordingmod.LiteModRecordingMod.Companion.mod
-import me.aris.recordingmod.Recorder.writeLaterLock
 import me.aris.recordingmod.mixins.GuiScreenAccessor
 import net.minecraft.client.gui.ScaledResolution
 import net.minecraft.network.PacketBuffer
@@ -395,22 +394,26 @@ object Recorder {
   fun compressRecording(recordingFile: File) {
     println("compressioning...")
     try {
-      File(LiteModRecordingMod.mod.recordingPath).mkdirs()
+      File(mod.recordingPath).mkdirs()
 
       val newRecordingFile = File(recordingFile.parent, recordingFile.nameWithoutExtension)
       recordingFile.renameTo(newRecordingFile)
       val micfile =
         File("recordings_in_progress", "mic-${recordingFile.nameWithoutExtension}.wav")
-      val os = System.getProperty("os.name").toLowerCase()
-//      if (os.contains("windows")) {
-      val exename = "\"${File(mod.sevenZipPath).absolutePath}\""
+      val exename = File(mod.sevenZipPath).absolutePath
       val pbuilder = ProcessBuilder(
-        "$exename a -t7z -sdel \"${
+        exename,
+        "a",
+        "-t7z",
+        "-sdel",
+        "${
           File(
-            File(LiteModRecordingMod.mod.recordingPath).absolutePath,
+            File(mod.recordingPath).absolutePath,
             newRecordingFile.nameWithoutExtension
           )
-        }.rec\" \"${newRecordingFile.name}\" \"${micfile.name}\""
+        }.rec",
+        newRecordingFile.name,
+        micfile.name
       )
       pbuilder.directory(File("recordings_in_progress"))
       pbuilder.redirectOutput()
