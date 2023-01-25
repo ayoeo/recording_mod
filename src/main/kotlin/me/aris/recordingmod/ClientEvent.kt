@@ -147,12 +147,14 @@ class ReplayTick(
               it.z
             )
           }
+
           spawnPaintingID -> (rawPacket.cookPacket() as SPacketSpawnPainting).let {
             Pair(
               it.position.x.toDouble(),
               it.position.z.toDouble()
             )
           }
+
           spawnObjectID -> (rawPacket.cookPacket() as SPacketSpawnObject).let { Pair(it.x, it.z) }
           spawnGlobalID -> (rawPacket.cookPacket() as SPacketSpawnGlobalEntity).let {
             Pair(
@@ -160,6 +162,7 @@ class ReplayTick(
               it.z
             )
           }
+
           else -> null
         }
 
@@ -331,6 +334,7 @@ sealed class ClientEvent {
           is Look -> -6
           is GuiState -> -7
           is Resize -> -8
+          is Timestamp -> -9
         }
       )
       event.writeToBuffer(buffer)
@@ -346,6 +350,7 @@ sealed class ClientEvent {
       -6 -> Look()
       -7 -> GuiState()
       -8 -> Resize
+      -9 -> Timestamp()
 
       else -> throw java.lang.Exception("Something's gone wrong")
     }
@@ -676,7 +681,12 @@ sealed class ClientEvent {
 //        val ent = mc.world.getEntityByID(this.ridingID)
         // TODO - FIX HORRIBLE BUG WITH MOUNTS
 //        if (ent is AbstractHorse) {
-        this.ridingRearing = buffer.readBoolean()
+        // TODO - Check the type of the entity, stored in some map while reading, and see what this mount is
+//        val isHorse = buffer.readBoolean()
+        val isHorse = true
+        if (isHorse) {
+          this.ridingRearing = buffer.readBoolean()
+        }
 //        }
       }
       this.position = Vec3d(buffer.readDouble(), buffer.readDouble(), buffer.readDouble())
@@ -701,6 +711,7 @@ sealed class ClientEvent {
       if (riding != null) {
         buffer.writeFloat(riding.rotationYaw)
         buffer.writeFloat(riding.rotationPitch)
+//        buffer.writeBoolean(riding is AbstractHorse)
         if (riding is AbstractHorse) {
           buffer.writeBoolean(riding.isRearing)
         }
@@ -819,6 +830,29 @@ sealed class ClientEvent {
   object Resize : ClientEvent() {
     override fun processEvent(replayState: ReplayState) {
       (mc as MinecraftAccessor).invokeResize(mc.displayWidth, mc.displayHeight)
+    }
+  }
+
+  class Timestamp : ClientEvent() {
+    override fun loadFromBuffer(buffer: PacketBuffer) {
+//        println("need to read timestamp at tickdex: ${ReplayState.}")
+//        println("reading timestamp: ${buffer.readLong()}")
+//        this.keybindState = trackedKeybinds.map {
+      buffer.readLong()
+//          Pair(buffer.readBoolean(), buffer.readVarInt())
+//        }
+    }
+
+    override fun writeToBuffer(buffer: PacketBuffer) {
+//        trackedKeybinds.forEach {
+//          it as KeyBindingAccessor
+//          buffer.writeBoolean(it.isKeyDown)
+//          buffer.writeVarInt(it.pressTime)
+//        }
+    }
+
+    override fun processEvent(replayState: ReplayState) {
+//        replayState.nextKeybindingState = this.keybindState
     }
   }
 }

@@ -401,7 +401,7 @@ object Recorder {
       val micfile =
         File("recordings_in_progress", "mic-${recordingFile.nameWithoutExtension}.wav")
       val exename = File(mod.sevenZipPath).absolutePath
-      val pbuilder = ProcessBuilder(
+      var pbuilder = ProcessBuilder(
         exename,
         "a",
         "-t7z",
@@ -409,16 +409,35 @@ object Recorder {
         "${
           File(
             File(mod.recordingPath).absolutePath,
-            newRecordingFile.nameWithoutExtension
+            "${newRecordingFile.nameWithoutExtension}/${newRecordingFile.nameWithoutExtension}"
           )
         }.rec",
-        newRecordingFile.name,
+        newRecordingFile.name
+      )
+      pbuilder.directory(File("recordings_in_progress"))
+      pbuilder.redirectOutput()
+      pbuilder.redirectError()
+      var proc = pbuilder.start()
+      proc.waitFor()
+
+      // mic file sold separately
+      pbuilder = ProcessBuilder(
+        exename,
+        "a",
+        "-t7z",
+        "-sdel",
+        "${
+          File(
+            File(mod.recordingPath).absolutePath,
+            "${newRecordingFile.nameWithoutExtension}/mic-${newRecordingFile.nameWithoutExtension}"
+          )
+        }.rec",
         micfile.name
       )
       pbuilder.directory(File("recordings_in_progress"))
       pbuilder.redirectOutput()
       pbuilder.redirectError()
-      val proc = pbuilder.start()
+      proc = pbuilder.start()
       proc.waitFor()
 //      } else {
 //        val pbuilder = ProcessBuilder(

@@ -52,7 +52,7 @@ object PacketIDsLol {
       EnumPacketDirection.CLIENTBOUND,
       SPacketPlayerListHeaderFooter()
     )
-  
+
 //  val headerFooterID =
 //    EnumConnectionState.PLAY.getPacketId(
 //      EnumPacketDirection.CLIENTBOUND,
@@ -144,6 +144,12 @@ object PacketIDsLol {
     EnumConnectionState.PLAY.getPacketId(
       EnumPacketDirection.CLIENTBOUND,
       SPacketChat()
+    )
+
+  val titleID =
+    EnumConnectionState.PLAY.getPacketId(
+      EnumPacketDirection.CLIENTBOUND,
+      SPacketTitle()
     )
 
   val customSoundID =

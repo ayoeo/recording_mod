@@ -26,17 +26,17 @@ import kotlin.math.ceil
 import kotlin.math.roundToInt
 
 external fun startEncode(
-  file: String,
-  width: Int,
-  height: Int,
-  fps: Int,
-  yA: Long,
-  uA: Long,
-  vA: Long,
-  yB: Long,
-  uB: Long,
-  vB: Long,
-  isProxy: Boolean
+    file: String,
+    width: Int,
+    height: Int,
+    fps: Int,
+    yA: Long,
+    uA: Long,
+    vA: Long,
+    yB: Long,
+    uB: Long,
+    vB: Long,
+    isProxy: Boolean
 ): Boolean
 
 external fun sendFrame(useBufferB: Boolean): Boolean
@@ -63,17 +63,17 @@ class MappedBuffer(bufferSize: Long) {
   init {
     OpenGlHelper.glBindBuffer(GL43.GL_SHADER_STORAGE_BUFFER, this.name)
     GL44.glBufferStorage(
-      GL43.GL_SHADER_STORAGE_BUFFER,
-      bufferSize,
-      GL30.GL_MAP_READ_BIT or GL44.GL_MAP_PERSISTENT_BIT or GL44.GL_MAP_COHERENT_BIT
+        GL43.GL_SHADER_STORAGE_BUFFER,
+        bufferSize,
+        GL30.GL_MAP_READ_BIT or GL44.GL_MAP_PERSISTENT_BIT or GL44.GL_MAP_COHERENT_BIT
     )
 
     this.data = GL30.glMapBufferRange(
-      GL43.GL_SHADER_STORAGE_BUFFER,
-      0,
-      bufferSize,
-      GL30.GL_MAP_READ_BIT,
-      null
+        GL43.GL_SHADER_STORAGE_BUFFER,
+        0,
+        bufferSize,
+        GL30.GL_MAP_READ_BIT,
+        null
     )
   }
 
@@ -89,34 +89,34 @@ class MappedBuffer(bufferSize: Long) {
 class DoubleBufferedChannels(size: Long) {
   private val yChannelA = MappedBuffer(size)
   private val uChannelA = MappedBuffer(
-    if (LiteModRecordingMod.mod.useYuv444) {
-      size
-    } else {
-      size / 4
-    }
+      if (mod.useYuv444) {
+        size
+      } else {
+        size / 4
+      }
   )
   private val vChannelA = MappedBuffer(
-    if (LiteModRecordingMod.mod.useYuv444) {
-      size
-    } else {
-      size / 4
-    }
+      if (mod.useYuv444) {
+        size
+      } else {
+        size / 4
+      }
   )
 
   private val yChannelB = MappedBuffer(size)
   private val uChannelB = MappedBuffer(
-    if (LiteModRecordingMod.mod.useYuv444) {
-      size
-    } else {
-      size / 4
-    }
+      if (mod.useYuv444) {
+        size
+      } else {
+        size / 4
+      }
   )
   private val vChannelB = MappedBuffer(
-    if (LiteModRecordingMod.mod.useYuv444) {
-      size
-    } else {
-      size / 4
-    }
+      if (mod.useYuv444) {
+        size
+      } else {
+        size / 4
+      }
   )
 
   var useBufferB = false
@@ -124,12 +124,12 @@ class DoubleBufferedChannels(size: Long) {
   private var fence: GLSync? = null
 
   fun yuvPointers() = longArrayOf(
-    (this.yChannelA.data as DirectBuffer).address(),
-    (this.uChannelA.data as DirectBuffer).address(),
-    (this.vChannelA.data as DirectBuffer).address(),
-    (this.yChannelB.data as DirectBuffer).address(),
-    (this.uChannelB.data as DirectBuffer).address(),
-    (this.vChannelB.data as DirectBuffer).address()
+      (this.yChannelA.data as DirectBuffer).address(),
+      (this.uChannelA.data as DirectBuffer).address(),
+      (this.vChannelA.data as DirectBuffer).address(),
+      (this.yChannelB.data as DirectBuffer).address(),
+      (this.uChannelB.data as DirectBuffer).address(),
+      (this.vChannelB.data as DirectBuffer).address()
   )
 
   fun swap() {
@@ -179,10 +179,10 @@ class DoubleBufferedChannels(size: Long) {
 
 // TODO - the renderingFps is good
 class RendererState(
-  val proxy: Boolean,
-  val file: String,
-  maybeTheBlendFactorWeDontKnow: Int,
-  val videoFps: Int
+    val proxy: Boolean,
+    val file: String,
+    maybeTheBlendFactorWeDontKnow: Int,
+    val videoFps: Int
 ) {
   val blendFactor = if (proxy) {
     1
@@ -225,7 +225,7 @@ fun loadComputeShader(file: String): Int {
   if (OpenGlHelper.glGetShaderi(i, OpenGlHelper.GL_COMPILE_STATUS) == 0) {
     val s = StringUtils.trim(OpenGlHelper.glGetShaderInfoLog(i, 32768))
     val jsonexception =
-      JsonException("Couldn't compile compute shader: $file - $s")
+        JsonException("Couldn't compile compute shader: $file - $s")
     jsonexception.setFilenameAndFlush(resourcelocation.path)
     throw jsonexception
   }
@@ -260,33 +260,36 @@ val convertProgram = run {
 val frameBlendFramebuffer = Framebuffer(mc.displayWidth, mc.displayHeight, false)
 
 val useYuv444Uniform = GLUniform.Float(
-  OpenGlHelper.glGetUniformLocation(convertProgram, "use_yuv444")
+    OpenGlHelper.glGetUniformLocation(convertProgram, "use_yuv444")
 )
 
 val blendFactorUniform = GLUniform.Float(
-  OpenGlHelper.glGetUniformLocation(accumProgram, "blendFactor")
+    OpenGlHelper.glGetUniformLocation(accumProgram, "blendFactor")
 )
 
 val frameImageUniform = GLUniform.Int(
-  OpenGlHelper.glGetUniformLocation(accumProgram, "frame")
+    OpenGlHelper.glGetUniformLocation(accumProgram, "frame")
 )
 
 val outFrameImageUniform = GLUniform.Int(
-  OpenGlHelper.glGetUniformLocation(accumProgram, "out_frame")
+    OpenGlHelper.glGetUniformLocation(accumProgram, "out_frame")
 )
 
 val inputImageUniform = GLUniform.Int(
-  OpenGlHelper.glGetUniformLocation(convertProgram, "input_image")
+    OpenGlHelper.glGetUniformLocation(convertProgram, "input_image")
 )
 
 val firstFrameUniform = GLUniform.Int(
-  OpenGlHelper.glGetUniformLocation(accumProgram, "firstFrame")
+    OpenGlHelper.glGetUniformLocation(accumProgram, "firstFrame")
 )
 
 object Renderer {
   init {
 //    val dll = File("librecording_mod_native.so")
 //    val os = System.getProperty("os.name").toLowerCase()
+
+//        addLibPath(File("natives").absolutePath)
+//        val os = System.getProperty("java.library.path")
     if (SystemUtils.IS_OS_WINDOWS) {
       val dll = File("recording_mod_native.dll")
       System.load(dll.absolutePath)
@@ -296,6 +299,7 @@ object Renderer {
       System.load(dll.absolutePath)
     }
   }
+
 
   val lastSystemTimeField = run {
     try {
@@ -338,8 +342,8 @@ object Renderer {
   var endTick = 0
 
   data class SloMoRegion(
-    val range: IntRange,
-    val slowMultiplier: Int
+      val range: IntRange,
+      val slowMultiplier: Int
   )
 
   var sloMoRegions = mutableListOf<SloMoRegion>()
@@ -369,17 +373,17 @@ object Renderer {
     // set it to the right size
     if (proxy) {
       (mc as MinecraftAccessor).invokeResize(
-        LiteModRecordingMod.mod.proxyRenderingWidth,
-        LiteModRecordingMod.mod.proxyRenderingHeight
+          mod.proxyRenderingWidth,
+          mod.proxyRenderingHeight
       )
     } else {
       (mc as MinecraftAccessor).invokeResize(
-        LiteModRecordingMod.mod.renderingWidth,
-        LiteModRecordingMod.mod.renderingHeight
+          mod.renderingWidth,
+          mod.renderingHeight
       )
     }
     frameBlendFramebuffer.createFramebuffer(mc.displayWidth, mc.displayHeight)
-    val file = "$startTick-${activeReplay!!.replayFile.nameWithoutExtension}.mp4"
+    val file = "$startTick..$endTick-${activeReplay!!.replayFile.nameWithoutExtension}.mp4"
     val filePath = if (proxy) {
       "proxies/$file"
     } else {
@@ -390,7 +394,7 @@ object Renderer {
 
     if (proxy) {
       val blueprint =
-        File("blueprints/$startTick..$endTick-${activeReplay!!.replayFile.nameWithoutExtension}.bp")
+          File("blueprints/$startTick..$endTick-${activeReplay!!.replayFile.nameWithoutExtension}.bp")
       blueprint.parentFile.mkdirs()
       blueprint.createNewFile()
       sloMoRegions.forEach { region ->
@@ -399,27 +403,27 @@ object Renderer {
     }
 
     val state = RendererState(
-      proxy,
-      filePath,
-      LiteModRecordingMod.mod.blendFactor,
-      LiteModRecordingMod.mod.renderingFps
+        proxy,
+        filePath,
+        mod.blendFactor,
+        mod.renderingFps
     )
     this.rendererState = state
 
     val pointers = state.yuvBuffers.yuvPointers()
     if (!startEncode(
-        state.file,
-        mc.displayWidth, // TODO - broken with non 16:9??? - oh who cares
-        mc.displayHeight,
-        state.videoFps,
-        pointers[0],
-        pointers[1],
-        pointers[2],
-        pointers[3],
-        pointers[4],
-        pointers[5],
-        isProxy
-      )
+            state.file,
+            mc.displayWidth, // TODO - broken with non 16:9??? - oh who cares
+            mc.displayHeight,
+            state.videoFps,
+            pointers[0],
+            pointers[1],
+            pointers[2],
+            pointers[3],
+            pointers[4],
+            pointers[5],
+            isProxy
+        )
     ) {
       println("Failed to start encoding")
       finishRender()
@@ -440,20 +444,20 @@ object Renderer {
 
     GlStateManager.setActiveTexture(GL_TEXTURE0)
     GL42.glBindImageTexture(
-      0,
-      mc.framebuffer.framebufferTexture,
-      0,
-      false,
-      0,
-      GL_READ_ONLY,
-      GL_RGBA8
+        0,
+        mc.framebuffer.framebufferTexture,
+        0,
+        false,
+        0,
+        GL_READ_ONLY,
+        GL_RGBA8
     )
     state.accumBuffer.bindBufferBase(1)
 
     GL43.glDispatchCompute(
-      ceil(mc.displayWidth / 32.0).toInt(),
-      ceil(mc.displayHeight / 32.0).toInt(),
-      1
+        ceil(mc.displayWidth / 32.0).toInt(),
+        ceil(mc.displayHeight / 32.0).toInt(),
+        1
     )
 
     if ((state.frameIndex + 1) % state.blendFactor != 0 && state.blendFactor > 1) {
@@ -470,20 +474,20 @@ object Renderer {
 
     GlStateManager.setActiveTexture(GL_TEXTURE0)
     GL42.glBindImageTexture(
-      0,
-      frameBlendFramebuffer.framebufferTexture,
-      0,
-      false,
-      0,
-      GL_WRITE_ONLY,
-      GL_RGBA8
+        0,
+        frameBlendFramebuffer.framebufferTexture,
+        0,
+        false,
+        0,
+        GL_WRITE_ONLY,
+        GL_RGBA8
     )
     state.accumBuffer.bindBufferBase(1)
 
     GL43.glDispatchCompute(
-      ceil(mc.displayWidth / 32.0).toInt(),
-      ceil(mc.displayHeight / 32.0).toInt(),
-      1
+        ceil(mc.displayWidth / 32.0).toInt(),
+        ceil(mc.displayHeight / 32.0).toInt(),
+        1
     )
     GL11.glFinish()
 
@@ -493,28 +497,28 @@ object Renderer {
 
     //-------------------Compute shader stuff-------------------//
     OpenGlHelper.glUseProgram(convertProgram)
-    useYuv444Uniform.set(if (LiteModRecordingMod.mod.useYuv444) 1f else 0f)
+    useYuv444Uniform.set(if (mod.useYuv444) 1f else 0f)
     inputImageUniform.set(0)
 
     // Use mc's framebuffer as the input image
     GlStateManager.setActiveTexture(GL_TEXTURE0)
     GL42.glBindImageTexture(
-      0,
-      frameBlendFramebuffer.framebufferTexture,
-      0,
-      false,
-      0,
-      GL_READ_ONLY,
-      GL_RGBA8
+        0,
+        frameBlendFramebuffer.framebufferTexture,
+        0,
+        false,
+        0,
+        GL_READ_ONLY,
+        GL_RGBA8
     )
 
     // Set YUV uniforms so we can get data : o
     state.yuvBuffers.bindBuffers()
 
     GL43.glDispatchCompute(
-      ceil(mc.displayWidth / 4.0 / 32.0).toInt(),
-      ceil(mc.displayHeight / 32.0).toInt(),
-      1
+        ceil(mc.displayWidth / 4.0 / 32.0).toInt(),
+        ceil(mc.displayHeight / 32.0).toInt(),
+        1
     )
     state.yuvBuffers.makeFence()
 //    println("Shader part ${state.frameIndex}, $shaderPart")
@@ -566,7 +570,7 @@ object Renderer {
       val framesPerTick = state.renderingFps / 20
       // Time for shaders and such
       ReplayState.systemTime =
-        state.initialSystemTime + ((state.frameIndex / framesPerTick.toFloat()) * 50).toLong()
+          state.initialSystemTime + ((state.frameIndex / framesPerTick.toFloat()) * 50).toLong()
     }
   }
 
@@ -585,7 +589,7 @@ object Renderer {
     val elapsedTicks = if (state.partialFrames > framesPerTick) {
       state.partialFrames -= framesPerTick
       val slowMaybeMultiplier =
-        `slowItDown?`(Pair(activeReplay!!.tickdex, state.partialFrames / framesPerTick.toFloat()))
+          `slowItDown?`(Pair(activeReplay!!.tickdex, state.partialFrames / framesPerTick.toFloat()))
       if (slowMaybeMultiplier != null) {
         slowMultiplier = slowMaybeMultiplier
         framesPerTick *= slowMultiplier
@@ -626,12 +630,12 @@ object Renderer {
     GlStateManager.matrixMode(5889)
     GlStateManager.loadIdentity()
     GlStateManager.ortho(
-      0.0,
-      Display.getWidth().toDouble(),
-      Display.getHeight().toDouble(),
-      0.0,
-      0.0,
-      1.0
+        0.0,
+        Display.getWidth().toDouble(),
+        Display.getHeight().toDouble(),
+        0.0,
+        0.0,
+        1.0
     )
     GlStateManager.matrixMode(5888)
     GlStateManager.loadIdentity()
@@ -645,40 +649,40 @@ object Renderer {
 
     // TODO - draw the blurred framebuffer instead of this one :)
     renderTexturedRect(
-      borderW,
-      borderH,
-      Display.getWidth() - borderW * 2,
-      Display.getHeight() - borderH * 2
+        borderW,
+        borderH,
+        Display.getWidth() - borderW * 2,
+        Display.getHeight() - borderH * 2
     )
     frameBlendFramebuffer.unbindFramebufferTexture()
     glScaled(3.0, 3.0, 1.0)
     val renderingText = "Rendering"
     mc.fontRenderer.drawStringWithShadow(
-      renderingText,
-      ((Display.getWidth() / 2) / 3.0 - mc.fontRenderer.getStringWidth(renderingText) / 2).toFloat(),
-      borderH / 3f - 12f,
-      0xFFCCCCCC.toInt()
+        renderingText,
+        ((Display.getWidth() / 2) / 3.0 - mc.fontRenderer.getStringWidth(renderingText) / 2).toFloat(),
+        borderH / 3f - 12f,
+        0xFFCCCCCC.toInt()
     )
 
     val framesPerTick = rendererState!!.renderingFps / 20.0
     val renderedFrames = rendererState!!.frameIndex
     val totalFrames = (endTick - startTick) * framesPerTick
     val progressText =
-      "$renderedFrames / ${totalFrames.toInt()} (${((renderedFrames / totalFrames) * 100.0).roundToInt()}%)"
+        "$renderedFrames / ${totalFrames.toInt()} (${((renderedFrames / totalFrames) * 100.0).roundToInt()}%)"
     mc.fontRenderer.drawStringWithShadow(
-      progressText,
-      ((Display.getWidth() / 2) / 3.0 - mc.fontRenderer.getStringWidth(progressText) / 2).toFloat(),
-      (Display.getHeight() - borderH) / 3f + 3f,
-      0xFFCCCCCC.toInt()
+        progressText,
+        ((Display.getWidth() / 2) / 3.0 - mc.fontRenderer.getStringWidth(progressText) / 2).toFloat(),
+        (Display.getHeight() - borderH) / 3f + 3f,
+        0xFFCCCCCC.toInt()
     )
   }
 
   fun makeSlowMoArea(mult: Int) {
     this.sloMoRegions.add(
-      SloMoRegion(
-        sloMoStartTick..sloMoEndTick,
-        mult
-      )
+        SloMoRegion(
+            sloMoStartTick..sloMoEndTick,
+            mult
+        )
     )
   }
 }

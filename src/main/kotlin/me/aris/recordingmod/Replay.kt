@@ -29,6 +29,7 @@ import me.aris.recordingmod.PacketIDsLol.spawnObjectID
 import me.aris.recordingmod.PacketIDsLol.spawnPaintingID
 import me.aris.recordingmod.PacketIDsLol.spawnPlayerID
 import me.aris.recordingmod.PacketIDsLol.teamsID
+import me.aris.recordingmod.PacketIDsLol.titleID
 import me.aris.recordingmod.PacketIDsLol.updateScore
 import me.aris.recordingmod.mixins.GuiContainerCreativeAccessor
 import me.aris.recordingmod.mixins.MinecraftAccessor
@@ -41,12 +42,12 @@ import net.minecraft.network.PacketBuffer
 import net.minecraft.network.play.server.*
 import net.minecraft.scoreboard.Scoreboard
 import net.minecraft.util.math.MathHelper
-import net.minecraft.util.text.TextFormatting
 import net.minecraft.util.text.event.HoverEvent
 import org.lwjgl.input.Keyboard
 import java.io.File
 import java.io.InputStream
 import java.io.RandomAccessFile
+import java.lang.NullPointerException
 import java.nio.ByteBuffer
 import kotlin.math.hypot
 import kotlin.math.max
@@ -229,157 +230,205 @@ object ReplayState {
   var nextAbsoluteState: ClientEvent.Absolutes? = null
 }
 
-private val killRegex =
-  Regex("""((?:\[.*] )?(?:.* )?(?:.*)) was slain by ((?:\[.*] )?(?:.* )?(?:.*)) with .*.""")
+//private val killRegex =
+//  Regex("""((?:\[.*] )?(?:.* )?(?:.*)) was slain by ((?:\[.*] )?(?:.* )?(?:.*)) with .*.""")
+private val killRegex = Regex("""(.*)§r was slain by §r(.*)§r[ .].*\.""")
 
 private val maxBufferSize = 1024 * 1024 * 16
 private val replayFileBuffer: ByteBuffer = ByteBuffer.allocate(maxBufferSize)
+
+private var lastSubtitleText: String? = null
+private var currentDungeon: String? = null
 fun createMarkers(replay: File) {
-  val name = replay.nameWithoutExtension
-  val recFile = File(mod.recordingPath, "$name.rec")
-  // clean it up now
-  val f = File(System.getProperty("java.io.tmpdir"), "uncompressed_recordings")
-  f.mkdirs()
+  try {
+    val name = replay.nameWithoutExtension
+    val recFile = File(mod.recordingPath, "$name/$name.rec")
+    // clean it up now
+    val f = File(System.getProperty("java.io.tmpdir"), "uncompressed_recordings")
+    f.mkdirs()
 
-  val uncompressedRecording = File(f, name)
-  if (!uncompressedRecording.exists()) {
-    f.listFiles()?.forEach { it.delete() }
-    val exename = File(mod.sevenZipPath).absolutePath
-    val pb = ProcessBuilder(exename, "x", recFile.absolutePath)
-    pb.directory(f)
-    pb.redirectOutput()
-    pb.redirectError()
-    val proc = pb.start()
-    val result = proc.waitFor()
-    if (result != 0) {
-      System.err.println("Could not uncompress recording: ${recFile.name} ($result)")
-      return
-    }
-  } else {
-    println("Recording was already uncompressed we're good")
-  }
-
-  val replay = File(f, name)
-  val raFile = RandomAccessFile(replay, "r")
-  val fileChannel = raFile.channel
-  var startPosition = 0L
-  var tickCount = 0
-
-  fileChannels@ while (true) {
-    replayFileBuffer.clear()
-    val bittsts = fileChannel.read(replayFileBuffer, startPosition)
-    replayFileBuffer.position(0)
-    replayFileBuffer.limit(bittsts)
-    val fileSize = replay.length()
-
-    val buffer = PacketBuffer(Unpooled.wrappedBuffer(replayFileBuffer))
-
-    while (true) {
-      if (buffer.readableBytes() <= 0) {
-        break@fileChannels
-      } else if (fileSize - startPosition > maxBufferSize && buffer.readableBytes() <= 1024 * 1024 * 2 + 32) {
-        // Check if we need to get another buffer
-        startPosition += buffer.readerIndex()
-        continue@fileChannels
+    val uncompressedRecording = File(f, name)
+    if (!uncompressedRecording.exists()) {
+      f.listFiles()?.forEach { it.delete() }
+      val exename = File(mod.sevenZipPath).absolutePath
+      val pb = ProcessBuilder(exename, "x", recFile.absolutePath)
+      pb.directory(f)
+      pb.redirectOutput()
+      pb.redirectError()
+      val proc = pb.start()
+      val result = proc.waitFor()
+      if (result != 0) {
+        System.err.println("Could not decompress recording: ${recFile.name} ($result)")
+        return
       }
+    } else {
+      println("Recording was already decompressed we're good")
+    }
 
-      val i = buffer.readVarInt()
-      if (i < 0) {
-        val clientEvent = ClientEvent.eventFromId(i)
-        clientEvent.loadFromBuffer(buffer)
+    val replay = File(f, name)
+    val raFile = RandomAccessFile(replay, "r")
+    val fileChannel = raFile.channel
+    var startPosition = 0L
+    var tickCount = 0
 
-        if (clientEvent is ClientEvent.TickEnd) {
-          tickCount++
-          continue
+    fileChannels@ while (true) {
+      replayFileBuffer.clear()
+      val bittsts = fileChannel.read(replayFileBuffer, startPosition)
+      replayFileBuffer.position(0)
+      replayFileBuffer.limit(bittsts)
+      val fileSize = replay.length()
+
+      val buffer = PacketBuffer(Unpooled.wrappedBuffer(replayFileBuffer))
+
+      while (true) {
+        if (buffer.readableBytes() <= 0) {
+          break@fileChannels
+        } else if (fileSize - startPosition > maxBufferSize && buffer.readableBytes() <= 1024 * 1024 * 2 + 32) {
+          // Check if we need to get another buffer
+          startPosition += buffer.readerIndex()
+          continue@fileChannels
         }
-      } else {
-        val size = buffer.readVarInt()
-        val bytes = ByteArray(size)
-        buffer.readBytes(bytes)
 
-        // TODO - check packet
+        val i = buffer.readVarInt()
+        if (i < 0) {
+          val clientEvent = ClientEvent.eventFromId(i)
+          clientEvent.loadFromBuffer(buffer)
+
+          if (clientEvent is ClientEvent.TickEnd) {
+            tickCount++
+            continue
+          }
+        } else {
+          val size = buffer.readVarInt()
+          val bytes = ByteArray(size)
+          buffer.readBytes(bytes)
+
+          // TODO - check packet
 //          serverPackets.add()
-        if (i == chatID) {
-          val packItUpShipItSomewhereIdcWhereManAnywhere =
-            RawServerPacket(i, size, bytes).cookPacket()
-          packItUpShipItSomewhereIdcWhereManAnywhere as SPacketChat
-          val msg = packItUpShipItSomewhereIdcWhereManAnywhere.chatComponent
-          val txt = msg.unformattedText
-          val unformatted = TextFormatting.getTextWithoutFormattingCodes(txt)!!
-          if (txt.contains("dropped: SHOW")) {
-            val t = msg.siblings
-            t.filter {
-              it.unformattedComponentText.equals("SHOW")
-            }.forEach { component ->
-              val hover = component.style.hoverEvent
-              if (hover?.action == HoverEvent.Action.SHOW_ITEM) {
-                val jsonThing =
-                  Gson().fromJson(hover.value.unformattedComponentText, JsonObject::class.java)
-                val mcName = jsonThing["id"]?.asString
-                val tierColor =
-                  jsonThing["tag"].asJsonObject["display"].asJsonObject["Name"].asString[3]
+          if (i == chatID) {
+            val packItUpShipItSomewhereIdcWhereManAnywhere =
+              RawServerPacket(i, size, bytes).cookPacket()
+            packItUpShipItSomewhereIdcWhereManAnywhere as SPacketChat
+            val msg = packItUpShipItSomewhereIdcWhereManAnywhere.chatComponent
+            val formatted = msg.formattedText
+            val txt = msg.unformattedText
+//            val unformatted = TextFormatting.getTextWithoutFormattingCodes(txt)!!
+            if (txt.contains("dropped: SHOW")) {
+              val t = msg.siblings
+              t.filter {
+                it.unformattedComponentText.equals("SHOW")
+              }.forEach { component ->
+                val hover = component.style.hoverEvent
+                if (hover?.action == HoverEvent.Action.SHOW_ITEM) {
+                  val jsonThing =
+                    Gson().fromJson(hover.value.unformattedComponentText, JsonObject::class.java)
+                  val mcName = jsonThing.get("id")?.asString
+                  val tierColor =
+                    jsonThing.get("tag")?.asJsonObject
+                      ?.get("display")?.asJsonObject
+                      ?.get("Name")?.asString
+                      ?.get(3)
 
-                // We don't want maps and dungeon fragments stay back
-                if (mcName == "minecraft:iron_nugget" || mcName == "minecraft:filled_map") return@forEach
+                  // We don't want maps and dungeon fragments stay back
+                  if (mcName == "minecraft:iron_nugget" || mcName == "minecraft:filled_map") return@forEach
 
-                val tier = when (tierColor) {
-                  'e' -> "t5"
-                  'd' -> "t4"
-                  'b' -> "t3"
-                  'a' -> "t2"
-                  'f' -> "t1"
-                  else -> "UNK"
+                  val tier = when (tierColor) {
+                    'e' -> "t5"
+                    'd' -> "t4"
+                    'b' -> "t3"
+                    'a' -> "t2"
+                    'f' -> "t1"
+                    else -> "UNK"
+                  }
+                  val type = when (mcName) {
+                    "minecraft:bow" -> "bow"
+                    "minecraft:shield" -> "shield"
+                    else -> mcName?.split("_")?.get(1) ?: "UNK"
+                  }
+                  val rarity =
+                    jsonThing.get("tag")?.asJsonObject
+                      ?.get("display")?.asJsonObject
+                      ?.get("Lore")?.asJsonArray
+                      ?.findLast { it.asString[4] == '§' }
+                      ?.asString?.substring(
+                        6
+                      ) ?: "UNK"
+
+                  val markerName = "drop_${tier}_${rarity.toLowerCase()}_${type}"
+                  makeMarker(replay, MarkerType.Drop, markerName, tickCount)
+//                  println("Found drop: $markerName")
                 }
-                val type = when (mcName) {
-                  "minecraft:bow" -> "bow"
-                  "minecraft:shield" -> "shield"
-                  else -> mcName?.split("_")?.get(1) ?: "UNK"
-                }
-                val rarity =
-                  jsonThing["tag"]
-                    .asJsonObject["display"]
-                    .asJsonObject["Lore"].asJsonArray
-                    .findLast { it.asString[4] == '§' }
-                    ?.asString?.substring(
-                      6
-                    ) ?: "UNK"
-
-                val markerName = "drop_${tier}_${rarity.toLowerCase()}_${type}"
-                makeMarker(replay, true, markerName, tickCount)
-                println("Found drop: $markerName")
               }
+            } else if (killRegex.containsMatchIn(formatted)) {
+              val groups = killRegex.find(formatted)!!.groups
+              val killed = groups[1]?.value
+              val killer = groups[2]?.value
+              val markerName = "$killer §r§lX $killed"
+              makeMarker(replay, MarkerType.Death, markerName, tickCount)
+//              println("Death: $markerName")
+//              println("Death raw: ${msg.formattedText}")
             }
-          } else if (killRegex.matches(unformatted)) {
-            val groups = killRegex.find(unformatted)!!.groups
-            val killed = groups[1]?.value
-            val killer = groups[2]?.value
-            val markerName = "$killer KILLED $killed"
-            makeMarker(replay, false, markerName, tickCount)
-            println("Death: $markerName")
+          } else if (i == titleID) {
+            val packItUpShipItSomewhereIdcWhereManAnywhere =
+              RawServerPacket(i, size, bytes).cookPacket()
+            packItUpShipItSomewhereIdcWhereManAnywhere as SPacketTitle
+            if (packItUpShipItSomewhereIdcWhereManAnywhere.type == SPacketTitle.Type.TITLE) {
+              val titleText = packItUpShipItSomewhereIdcWhereManAnywhere.message.unformattedText
+              val titleTextFormatted = packItUpShipItSomewhereIdcWhereManAnywhere.message.formattedText
+              if (titleTextFormatted.startsWith("§") &&
+                !titleTextFormatted.contains("Loading Shard") &&
+                lastSubtitleText?.contains("Objective") == true
+              ) {
+                currentDungeon = titleTextFormatted
+//                println("Dungeon Start - $titleTextFormatted, $lastSubtitleText")
+                val markerName = "DStart $titleTextFormatted"
+                makeMarker(replay, MarkerType.Dungeon, markerName, tickCount)
+              } else if (titleText.contains("Dungeon Complete!")) {
+//                println("Dungeon Complete - $lastSubtitlText")
+                val markerName = "DFinish $lastSubtitleText"
+                makeMarker(replay, MarkerType.Dungeon, markerName, tickCount)
+              } else if (titleText.contains("Dungeon Failed")) {
+//                println("Dungeon Failed - $currentDungeon")
+                val markerName = "DFail $currentDungeon"
+                makeMarker(replay, MarkerType.Dungeon, markerName, tickCount)
+              }
+            } else if (packItUpShipItSomewhereIdcWhereManAnywhere.type == SPacketTitle.Type.SUBTITLE) {
+              val subtitleText = packItUpShipItSomewhereIdcWhereManAnywhere.message.formattedText
+              lastSubtitleText = subtitleText
+            }
           }
         }
       }
     }
+    raFile.close()
+  } catch (npe: NullPointerException) {
+    println("THIS SHOULD NEVER HAPPEN??? (I HOPE)")
+    npe.printStackTrace()
   }
-  raFile.close()
 }
 
-fun makeMarker(recordingFile: File, drop: Boolean, name: String, tickdex: Int) {
+enum class MarkerType {
+  Death,
+  Drop,
+  Dungeon,
+}
+
+fun makeMarker(recordingFile: File, type: MarkerType, name: String, tickdex: Int) {
   val recordingName = recordingFile.nameWithoutExtension
-  File(if (drop) "generated_markers/drops" else "generated_markers/pks").mkdirs()
+
+  val dir = when (type) {
+    MarkerType.Drop -> "generated_markers/drops"
+    MarkerType.Death -> "generated_markers/deaths"
+    MarkerType.Dungeon -> "generated_markers/dungeons"
+  }
+  File(dir).mkdirs()
+
   var s = name.replace("[\\\\/:*?\"<>|]".toRegex(), "_");
-  while (File(
-      if (drop) "generated_markers/drops" else "generated_markers/pks",
-      "$s-$recordingName"
-    ).exists()
-  ) {
+  while (File(dir, "$s-$recordingName").exists()) {
     s += "_"
   }
 
-  File(
-    if (drop) "generated_markers/drops" else "generated_markers/pks",
-    "$s-$recordingName"
-  ).writeText("$tickdex")
+  File(dir, "$s-$recordingName").writeText("$tickdex")
 }
 
 data class CameraRotationsAtTick(val cameraRotations: List<CameraRotation>, val tickdex: Int)
@@ -704,12 +753,14 @@ class Replay(val replayFile: File) {
                 it.z
               )
             }
+
             spawnPaintingID -> (rawPacket.cookPacket() as SPacketSpawnPainting).let {
               Pair(
                 it.position.x.toDouble(),
                 it.position.z.toDouble()
               )
             }
+
             spawnObjectID -> (rawPacket.cookPacket() as SPacketSpawnObject).let { Pair(it.x, it.z) }
             spawnGlobalID -> (rawPacket.cookPacket() as SPacketSpawnGlobalEntity).let {
               Pair(
@@ -717,6 +768,7 @@ class Replay(val replayFile: File) {
                 it.z
               )
             }
+
             else -> null
           }
 

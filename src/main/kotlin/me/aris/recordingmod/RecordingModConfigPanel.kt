@@ -43,16 +43,17 @@ class RecordingModConfigPanel : AbstractConfigPanel() {
     mc.displayGuiScreen(GuiDownloadTerrain())
 
     Thread {
-      File("blueprints")
-        .listFiles()
+      File("blueprints").listFiles()
         ?.filter { it.extension == "bp" }
+        ?.filter {  File("proxies", "${it.nameWithoutExtension}.mp4").exists()  }
+        ?.filterNot {  File(mod.finalRenderPath, "${it.nameWithoutExtension}.mp4").exists()  }
         ?.forEach { file ->
           println("rendering blueprint ${file.name}")
           val splitthefileohgod = file.nameWithoutExtension.split('-')[0]
           val starttickdex = splitthefileohgod.split("..")[0].toInt()
           val endtickdex = splitthefileohgod.split("..")[1].toInt()
           val name = file.nameWithoutExtension.split('-')[1]
-          val recFile = File(mod.recordingPath, "$name.rec")
+          val recFile = File(mod.recordingPath, "$name/$name.rec")
 
           // clean it up now
           val f = File(System.getProperty("java.io.tmpdir"), "uncompressed_recordings")
@@ -69,11 +70,11 @@ class RecordingModConfigPanel : AbstractConfigPanel() {
             val proc = pb.start()
             val result = proc.waitFor()
             if (result != 0) {
-              System.err.println("Could not uncompress recording: ${recFile.name} ($result)")
+              System.err.println("Could not decompress recording: ${recFile.name} ($result)")
               return@forEach
             }
           } else {
-            println("Recording was already uncompressed we're good")
+            println("Recording was already decompressed we're good")
           }
 
           println("rendering $name...")
@@ -111,8 +112,8 @@ class RecordingModConfigPanel : AbstractConfigPanel() {
   private fun markAllFiles() {
     File(mod.recordingPath)
       .listFiles()
-      ?.filter { it.extension == "rec" }
-      ?.withIndex()?.forEach { (i, file) ->
+      ?.filter { it.isDirectory }
+      ?.forEach { file ->
         try {
           createMarkers(file)
         } catch (e: Exception) {

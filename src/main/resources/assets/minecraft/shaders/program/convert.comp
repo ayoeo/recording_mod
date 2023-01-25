@@ -17,27 +17,27 @@ vec3 color_at(uint x, uint y) {
 }
 
 // Full range
-//ivec3 yuv_from_rgb(vec3 rgb) {
-//  float r = rgb.r * 255;
-//  float g = rgb.g * 255;
-//  float b = rgb.b * 255;
-//  float y = 0.299 * r + 0.587 * g + 0.114 * b;
-//  float u = -0.169 * r - 0.331 * g + 0.500 * b + 128;
-//  float v = 0.500 * r - 0.419 * g - 0.081 * b + 128;
-//  return ivec3(y, u, v);
-//}
+ivec3 yuv_from_rgb(vec3 rgb) {
+  float r = rgb.r * 255;
+  float g = rgb.g * 255;
+  float b = rgb.b * 255;
+  float y = 0.299 * r + 0.587 * g + 0.114 * b;
+  float u = -0.169 * r - 0.331 * g + 0.500 * b + 128;
+  float v = 0.500 * r - 0.419 * g - 0.081 * b + 128;
+  return ivec3(y, u, v);
+}
 
 
 // Limited range
-ivec3 yuv_from_rgb(vec3 rgb) {
-  uint r = uint(rgb.r * 255.0);
-  uint g = uint(rgb.g * 255.0);
-  uint b = uint(rgb.b * 255.0);
-  uint y = ((66 * r + 129 * g + 25 * b + 128) >> 8) + 16;
-  uint u = ((-38 * r - 74 * g + 112 * b + 128) >> 8) + 128;
-  uint v = ((112 * r - 94 * g - 18 * b + 128) >> 8) + 128;
-  return ivec3(y, u, v);
-}
+//ivec3 yuv_from_rgb(vec3 rgb) {
+//  uint r = uint(rgb.r * 255.0);
+//  uint g = uint(rgb.g * 255.0);
+//  uint b = uint(rgb.b * 255.0);
+//  uint y = ((66 * r + 129 * g + 25 * b + 128) >> 8) + 16;
+//  uint u = ((-38 * r - 74 * g + 112 * b + 128) >> 8) + 128;
+//  uint v = ((112 * r - 94 * g - 18 * b + 128) >> 8) + 128;
+//  return ivec3(y, u, v);
+//}
 
 uint pack_4(ivec4 bytes) {
   return bytes.x | (bytes.y << 8) | (bytes.z << 16) | (bytes.w << 24);
@@ -67,16 +67,16 @@ void main() {
   y_ch[x * 2 + y * width] = pack_4(ivec4(p0.x, p1.x, p2.x, p3.x));
   y_ch[x * 2 + 1 + y * width] = pack_4(ivec4(p4.x, p5.x, p6.x, p7.x));
 
-  if (use_yuv444 == 1f) {
-    u_ch[x * 2 + y * width] = pack_4(ivec4(p0.y, p1.y, p2.y, p3.y));
-    u_ch[x * 2 + 1 + y * width] = pack_4(ivec4(p4.y, p5.y, p6.y, p7.y));
+//  if (use_yuv444 == 1) {
+  u_ch[x * 2 + y * width] = pack_4(ivec4(p0.y, p1.y, p2.y, p3.y));
+  u_ch[x * 2 + 1 + y * width] = pack_4(ivec4(p4.y, p5.y, p6.y, p7.y));
 
-    v_ch[x * 2 + y * width] = pack_4(ivec4(p0.z, p1.z, p2.z, p3.z));
-    v_ch[x * 2 + 1 + y * width] = pack_4(ivec4(p4.z, p5.z, p6.z, p7.z));
-  } else {
-    if (y % 2 == 0) {
-      u_ch[x + (y / 2) * (width / 2)] = pack_4(ivec4(p0.y, p2.y, p4.y, p6.y));
-      v_ch[x + (y / 2) * (width / 2)] = pack_4(ivec4(p0.z, p2.z, p4.z, p6.z));
-    }
-  }
+  v_ch[x * 2 + y * width] = pack_4(ivec4(p0.z, p1.z, p2.z, p3.z));
+  v_ch[x * 2 + 1 + y * width] = pack_4(ivec4(p4.z, p5.z, p6.z, p7.z));
+//  } else {
+//    if (y % 2 == 0) {
+//      u_ch[x + (y / 2) * (width / 2)] = pack_4(ivec4(p0.y, p2.y, p4.y, p6.y));
+//      v_ch[x + (y / 2) * (width / 2)] = pack_4(ivec4(p0.z, p2.z, p4.z, p6.z));
+//    }
+//  }
 }

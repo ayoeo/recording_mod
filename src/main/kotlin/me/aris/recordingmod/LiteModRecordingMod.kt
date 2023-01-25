@@ -247,8 +247,8 @@ class MarkerList(
     // TODO - set last played index to 'index' and then it will be a different color which we CAN USE TO TELL WHERE WE ARE HAHA
     val name = this.markers[index].recordingName
     val tickdex = this.markers[index].tickdex
-    println("uncompressing $name")
-    val recFile = File(mod.recordingPath, "$name.rec")
+    println("decompressing $name")
+    val recFile = File(mod.recordingPath, "$name/$name.rec")
 
     // clean it up now
     val f = File(System.getProperty("java.io.tmpdir"), "uncompressed_recordings")
@@ -264,7 +264,7 @@ class MarkerList(
       val proc = pb.start()
       proc.waitFor()
     } else {
-      println("Recording was already uncompressed we're good")
+      println("Recording was already decompressed we're good")
     }
     println("playing $name")
     mc.displayGuiScreen(GuiDownloadTerrain())
@@ -298,7 +298,7 @@ class RecordingsList(
   init {
     File(mod.recordingPath)
       .listFiles()
-      ?.filter { it.extension == "rec" }
+      ?.filter { it.isDirectory }
       ?.withIndex()?.forEach { (i, file) ->
         this.recordings.add(RecordingEntry(i, file.nameWithoutExtension))
       }
@@ -314,7 +314,7 @@ class RecordingsList(
     // TODO - set last played index to 'index' and then it will be a different color which we CAN USE TO TELL WHERE WE ARE HAHA
     val name = this.recordings[index].name
     println("uncompressing $name")
-    val recFile = File(mod.recordingPath, "$name.rec")
+    val recFile = File(mod.recordingPath, "$name/$name.rec")
 
     // clean it up now
     val f = File(System.getProperty("java.io.tmpdir"), "uncompressed_recordings")
@@ -331,11 +331,11 @@ class RecordingsList(
       val proc = pb.start()
       val result = proc.waitFor()
       if (result != 0) {
-        System.err.println("Could not uncompress recording: ${recFile.name} ($result)")
+        System.err.println("Could not decompress recording: ${recFile.name} ($result)")
         return
       }
     } else {
-      println("Recording was already uncompressed we're good")
+      println("Recording was already decompressed we're good")
     }
 
 //    println("doing that looking through chat and stuff")
@@ -525,8 +525,15 @@ class LiteModRecordingMod : LiteMod, Tickable, HUDRenderListener, Configurable {
     f.mkdirs()
     f.deleteRecursively()
 
-//    next thing you do is make a gui that shows all the recordings, can decompress and play them (put in temp folder)
-    compressThread = Thread() {
+    // Fix old recording files
+    val recordings = File(mod.recordingPath)
+    for (rec in recordings.listFiles().filter { it.isFile && it.extension == "rec" }) {
+      val newFile = File(mod.recordingPath, rec.nameWithoutExtension)
+      newFile.mkdirs()
+      rec.renameTo(File(newFile, rec.name))
+    }
+
+    compressThread = Thread {
       checkAndCompressFiles()
     }
     compressThread?.start()
